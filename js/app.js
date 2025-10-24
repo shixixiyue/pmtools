@@ -20,12 +20,13 @@ class ProductCanvasApp {
     this.currentSvgId = null;
     this.conversationHistory = {};
     this.isProcessing = false;
-    this.currentStreamingMessage = null;
+    this.activeStreamHandle = null;
     
     this.initElements();
     this.initEventListeners();
     this.loadSavedData();
     this.updateModeUI();
+    this.setSendButtonState('idle');
   }
 
   getModeDisplayName(mode = this.currentMode) {
@@ -47,7 +48,7 @@ class ProductCanvasApp {
     
     // SVG显示
     this.svgViewer = document.getElementById('svg-viewer');
-    this.placeholderText = document.getElementById('placeholder-text');
+    this.placeholderText = this.svgViewer.querySelector('#placeholder-text');
     
     // 底部操作按钮
     this.downloadSvgBtn = document.getElementById('download-svg-btn');
@@ -74,14 +75,22 @@ class ProductCanvasApp {
     this.swotBtn.addEventListener('click', () => this.switchMode('swot'));
     
     // 发送消息
-    this.sendButton.addEventListener('click', () => this.sendMessage());
+    this.sendButton.addEventListener('click', () => {
+      if (this.isProcessing) {
+        this.cancelActiveStream();
+      } else {
+        this.sendMessage();
+      }
+    });
     this.clearHistoryBtn.addEventListener('click', () => this.clearCurrentConversation());
     
     // 输入框事件
     this.chatInput.addEventListener('keypress', (e) => {
       if (e.key === 'Enter' && !e.shiftKey) {
         e.preventDefault();
-        this.sendMessage();
+        if (!this.isProcessing) {
+          this.sendMessage();
+        }
       }
     });
     
@@ -147,8 +156,7 @@ class ProductCanvasApp {
     this.currentMode = mode;
     Utils.storage.set('currentMode', mode);
     this.currentSvgId = null;
-    this.currentMode = mode;
-    Utils.storage.set('currentMode', mode);
+    this.showSvgPlaceholder();
     this.updateModeUI();
     this.renderConversationHistory();
     this.renderSvgViewerForMode();
@@ -156,24 +164,65 @@ class ProductCanvasApp {
 
   // 更新模式UI
   updateModeUI() {
-    if (this.currentMode === 'canvas') {
+    const isCanvas = this.currentMode === 'canvas';
+
+    if (isCanvas) {
       this.canvasBtn.classList.add('mode-btn-active');
       this.canvasBtn.classList.remove('mode-btn-inactive');
       this.swotBtn.classList.remove('mode-btn-active');
       this.swotBtn.classList.add('mode-btn-inactive');
-      this.pageTitle.textContent = '产品画布';
-      if (!this.currentSvgId) {
-        this.placeholderText.textContent = '生成的产品画布将在此处显示';
-      }
     } else {
       this.swotBtn.classList.add('mode-btn-active');
       this.swotBtn.classList.remove('mode-btn-inactive');
       this.canvasBtn.classList.remove('mode-btn-active');
       this.canvasBtn.classList.add('mode-btn-inactive');
-      this.pageTitle.textContent = 'SWOT分析';
-      if (!this.currentSvgId) {
-        this.placeholderText.textContent = '生成的SWOT分析将在此处显示';
+    }
+
+    this.pageTitle.textContent = isCanvas ? '产品画布' : 'SWOT分析';
+
+    if (!this.currentSvgId) {
+      const placeholder = this.svgViewer.querySelector('#placeholder-text');
+      if (placeholder) {
+        placeholder.textContent = `生成的${this.getModeDisplayName()}将在此处显示`;
       }
+    }
+  }
+
+  setSendButtonState(state) {
+    this.sendButtonState = state;
+    if (!this.sendButton) return;
+
+    if (state === 'streaming') {
+      this.sendButton.innerHTML = `
+        <span class="flex items-center gap-1 text-red-600 font-bold">
+          <iconify-icon icon="ph:hand-palm-bold" class="text-2xl"></iconify-icon>
+          <span>终止</span>
+        </span>
+      `;
+      this.sendButton.classList.add('terminate-mode');
+      this.sendButton.title = '终止当前生成';
+    } else if (state === 'terminating') {
+      this.sendButton.innerHTML = `
+        <span class="flex items-center gap-1 text-orange-500 font-bold">
+          <iconify-icon icon="ph:hourglass-medium-bold" class="text-2xl"></iconify-icon>
+          <span>终止中</span>
+        </span>
+      `;
+      this.sendButton.classList.add('terminate-mode');
+      this.sendButton.title = '正在终止生成';
+    } else if (state === 'busy') {
+      this.sendButton.innerHTML = `
+        <span class="flex items-center gap-1 text-blue-600 font-bold">
+          <iconify-icon icon="ph:clock-bold" class="text-2xl"></iconify-icon>
+          <span>处理中</span>
+        </span>
+      `;
+      this.sendButton.classList.add('terminate-mode');
+      this.sendButton.title = '正在处理请求';
+    } else {
+      this.sendButton.innerHTML = '<iconify-icon icon="ph:paper-plane-tilt-fill" class="text-3xl"></iconify-icon>';
+      this.sendButton.classList.remove('terminate-mode');
+      this.sendButton.title = '发送';
     }
   }
 
@@ -186,6 +235,7 @@ class ProductCanvasApp {
         <p class="mt-2 font-bold" id="placeholder-text">生成的${label}将在此处显示</p>
       </div>
     `;
+    this.placeholderText = this.svgViewer.querySelector('#placeholder-text');
   }
 
   renderSvgViewerForMode() {
@@ -208,6 +258,7 @@ class ProductCanvasApp {
     if (latestSvgId && svgStore[latestSvgId]) {
       this.currentSvgId = latestSvgId;
       this.svgViewer.innerHTML = svgStore[latestSvgId].content;
+      this.placeholderText = null;
     } else {
       this.showSvgPlaceholder();
     }
@@ -226,8 +277,8 @@ class ProductCanvasApp {
     }
     
     this.isProcessing = true;
+    this.setSendButtonState('busy');
     this.sendButton.disabled = true;
-    this.sendButton.innerHTML = '<iconify-icon icon="ph:spinner-gap" class="text-3xl animate-spin"></iconify-icon>';
     
     // 添加用户消息
     this.addUserMessage(message);
@@ -250,137 +301,182 @@ class ProductCanvasApp {
       console.error('发送消息失败:', error);
       this.addErrorMessage(error.message);
       this.isProcessing = false;
-      this.sendButton.disabled = false;
-      this.sendButton.innerHTML = '<iconify-icon icon="ph:paper-plane-tilt-fill" class="text-3xl"></iconify-icon>';
+      this.setSendButtonState('idle');
+      this.activeStreamHandle = null;
     }
   }
 
   // 开始流式接收消息
   async startStreamingMessage(userMessage, contextMessages) {
-    // 创建流式消息容器
     const messageId = Utils.generateId('msg');
     const messageContainer = this.createStreamingMessageContainer(messageId);
     this.chatHistory.appendChild(messageContainer);
     Utils.scrollToBottom(this.chatHistory);
-    
+
     let fullContent = '';
     let svgStarted = false;
     let svgContent = '';
     let svgId = null;
     let beforeText = '';
-    
-    const onChunk = (chunk) => {
-      if (chunk.choices && chunk.choices[0] && chunk.choices[0].delta) {
-        const content = chunk.choices[0].delta.content || '';
-        fullContent += content;
-        
-        // 检测SVG开始标记
-        if (!svgStarted) {
-          // 使用正则表达式更准确地检测SVG代码块开始
-          const svgStartMatch = fullContent.match(/```(?:svg)?\s*<svg[\s\S]*?>/i);
-          if (svgStartMatch) {
-            svgStarted = true;
-            svgId = Utils.generateId('svg');
-            
-            // 提取SVG开始前的文本
-            const svgStartIndex = svgStartMatch.index;
-            beforeText = fullContent.substring(0, svgStartIndex);
-            
-            // 显示绘制中占位符
-            this.updateStreamingMessageWithPlaceholder(messageContainer, beforeText, svgId);
-            
-            // 初始化SVG显示区域
-            this.svgViewer.innerHTML = `
-              <div class="flex items-center justify-center h-full">
-                <div class="text-center">
-                  <iconify-icon icon="ph:spinner-gap" class="text-6xl text-purple-500 animate-spin"></iconify-icon>
-                  <p class="mt-4 font-bold text-gray-600">正在绘制${this.currentMode === 'canvas' ? '产品画布' : 'SWOT分析'}...</p>
-                </div>
-              </div>
-            `;
-          }
+
+    let streamClosed = false;
+    this.activeStreamHandle = null;
+
+    const finalizeStream = (info = {}) => {
+      if (streamClosed) return;
+      streamClosed = true;
+
+      const trimmedContent = fullContent.trim();
+      if (!trimmedContent && !svgId) {
+        const bubble = this.chatHistory.querySelector(`[data-message-id="${messageId}"]`);
+        if (bubble) {
+          const wrapper = bubble.closest('.flex');
+          if (wrapper) wrapper.remove();
         }
-        
-        // 如果SVG已经开始，收集SVG内容
-        if (svgStarted) {
-          // 检查是否有SVG结束标记
-          if (fullContent.includes('</svg>')) {
-            const svgEndIndex = fullContent.indexOf('</svg>') + 6; // +6 是 '</svg>' 的长度
-            
-            // 提取完整的SVG内容
-            const svgStartMatch = fullContent.match(/```(?:svg)?\s*<svg[\s\S]*?>/i);
-            if (svgStartMatch) {
-              const svgStartIndex = svgStartMatch.index;
-              let svgWithMarkers = fullContent.substring(svgStartIndex, svgEndIndex);
-              
-              // 移除代码块标记
-              svgContent = svgWithMarkers.replace(/```(?:svg)?\s*/, '').replace(/```$/, '').trim();
-              
-              // 补全SVG结束标签（如果没有的话）
-              if (!svgContent.endsWith('</svg>')) {
-                svgContent += '</svg>';
-              }
-              
-              // 实时显示SVG
-              this.svgViewer.innerHTML = svgContent;
-              
-              // 存储SVG内容
-              this.svgStorage[this.currentMode][svgId] = {
-                content: svgContent,
-                messageId: messageId,
-                mode: this.currentMode,
-                timestamp: new Date().toISOString()
-              };
-              
-              // 更新占位符为可点击状态
-              this.updatePlaceholderToClickable(messageContainer, svgId);
-              
-              // 重置SVG状态，继续接收剩余文本
-              svgStarted = false;
-              const afterText = fullContent.substring(svgEndIndex);
-              this.updateStreamingMessageAfterSVG(messageContainer, beforeText, svgId, afterText);
-            }
-          } else {
-            // SVG还在继续，更新内容
-            const svgStartMatch = fullContent.match(/```(?:svg)?\s*<svg[\s\S]*?>/i);
-            if (svgStartMatch) {
-              const svgStartIndex = svgStartMatch.index;
-              let svgWithMarkers = fullContent.substring(svgStartIndex);
-              
-              // 移除代码块标记
-              svgContent = svgWithMarkers.replace(/```(?:svg)?\s*/, '').replace(/```$/, '').trim();
-              
-              // 补全SVG结束标签以便实时显示
-              let tempSvgContent = svgContent;
-              if (!tempSvgContent.endsWith('</svg>')) {
-                tempSvgContent += '</svg>';
-              }
-              
-              // 实时更新SVG显示
-              this.svgViewer.innerHTML = tempSvgContent;
-            }
-          }
-        } else {
-          // 普通文本更新
-          this.updateStreamingMessage(messageContainer, fullContent);
+      } else {
+        this.finalizeStreamingMessage(messageId, fullContent, svgId);
+      }
+
+      this.isProcessing = false;
+      this.setSendButtonState('idle');
+      this.activeStreamHandle = null;
+    };
+
+    const onChunk = (chunk) => {
+      if (
+        streamClosed ||
+        !chunk ||
+        !chunk.choices ||
+        !chunk.choices[0] ||
+        !chunk.choices[0].delta
+      ) {
+        return;
+      }
+
+      const content = chunk.choices[0].delta.content || '';
+      if (!content) return;
+
+      fullContent += content;
+
+      if (!svgStarted) {
+        const svgStartMatch = fullContent.match(/```(?:svg)?\s*<svg[\s\S]*?>/i);
+        if (svgStartMatch) {
+          svgStarted = true;
+          svgId = svgId || Utils.generateId('svg');
+
+          const svgStartIndex = svgStartMatch.index;
+          beforeText = fullContent.substring(0, svgStartIndex);
+
+          this.updateStreamingMessageWithPlaceholder(messageContainer, beforeText, svgId);
+
+          this.svgViewer.innerHTML = `
+            <div class="flex items-center justify-center h-full">
+              <div class="text-center">
+                <iconify-icon icon="ph:spinner-gap" class="text-6xl text-purple-500 animate-spin"></iconify-icon>
+                <p class="mt-4 font-bold text-gray-600">正在绘制${this.currentMode === 'canvas' ? '产品画布' : 'SWOT分析'}...</p>
+              </div>
+            </div>
+          `;
         }
       }
+
+      if (svgStarted) {
+        if (fullContent.includes('</svg>')) {
+          const svgEndIndex = fullContent.indexOf('</svg>') + 6;
+          const svgStartMatch = fullContent.match(/```(?:svg)?\s*<svg[\s\S]*?>/i);
+          if (svgStartMatch) {
+            const svgStartIndex = svgStartMatch.index;
+            let svgWithMarkers = fullContent.substring(svgStartIndex, svgEndIndex);
+
+            svgContent = svgWithMarkers.replace(/```(?:svg)?\s*/, '').replace(/```$/, '').trim();
+            if (!svgContent.endsWith('</svg>')) {
+              svgContent += '</svg>';
+            }
+
+            this.svgViewer.innerHTML = svgContent;
+
+            this.svgStorage[this.currentMode][svgId] = {
+              content: svgContent,
+              messageId,
+              mode: this.currentMode,
+              timestamp: new Date().toISOString()
+            };
+
+            this.updatePlaceholderToClickable(messageContainer, svgId);
+
+            svgStarted = false;
+            const afterText = fullContent.substring(svgEndIndex);
+            this.updateStreamingMessageAfterSVG(messageContainer, beforeText, svgId, afterText);
+          }
+        } else {
+          const svgStartMatch = fullContent.match(/```(?:svg)?\s*<svg[\s\S]*?>/i);
+          if (svgStartMatch) {
+            const svgStartIndex = svgStartMatch.index;
+            let svgWithMarkers = fullContent.substring(svgStartIndex);
+
+            svgContent = svgWithMarkers.replace(/```(?:svg)?\s*/, '').replace(/```$/, '').trim();
+            let tempSvgContent = svgContent;
+            if (!tempSvgContent.endsWith('</svg>')) {
+              tempSvgContent += '</svg>';
+            }
+
+            this.svgViewer.innerHTML = tempSvgContent;
+          }
+        }
+      } else {
+        this.updateStreamingMessage(messageContainer, fullContent);
+      }
     };
-    
-    const onComplete = () => {
-      // 流式接收完成，处理完整消息
-      this.finalizeStreamingMessage(messageId, fullContent, svgId);
-      
+
+    const onComplete = (info = {}) => {
+      finalizeStream(info);
+    };
+
+    try {
+      const streamHandle = await (
+        this.currentMode === 'canvas'
+          ? window.apiClient.generateProductCanvasStream(userMessage, contextMessages, onChunk, onComplete)
+          : window.apiClient.generateSWOTAnalysisStream(userMessage, contextMessages, onChunk, onComplete)
+      );
+
+      this.activeStreamHandle = streamHandle;
+
+      await streamHandle.finished;
+
+      if (!streamClosed) {
+        finalizeStream({ aborted: false });
+      }
+    } catch (error) {
+      streamClosed = true;
+      this.activeStreamHandle = null;
       this.isProcessing = false;
-      this.sendButton.disabled = false;
-      this.sendButton.innerHTML = '<iconify-icon icon="ph:paper-plane-tilt-fill" class="text-3xl"></iconify-icon>';
-    };
-    
-    // 调用流式API
-    if (this.currentMode === 'canvas') {
-      await window.apiClient.generateProductCanvasStream(userMessage, contextMessages, onChunk, onComplete);
-    } else {
-      await window.apiClient.generateSWOTAnalysisStream(userMessage, contextMessages, onChunk, onComplete);
+      this.setSendButtonState('idle');
+
+      const bubble = this.chatHistory.querySelector(`[data-message-id="${messageId}"]`);
+      if (bubble) {
+        const wrapper = bubble.closest('.flex');
+        if (wrapper) wrapper.remove();
+      }
+
+      if (error && error.name === 'AbortError') {
+        return;
+      }
+
+      console.error('发送消息失败:', error);
+      this.addErrorMessage(error.message || '生成失败');
+    }
+  }
+
+  cancelActiveStream() {
+    if (!this.activeStreamHandle || typeof this.activeStreamHandle.cancel !== 'function') {
+      return;
+    }
+
+    this.setSendButtonState('terminating');
+    try {
+      this.activeStreamHandle.cancel();
+    } catch (error) {
+      console.warn('终止流式请求失败:', error);
     }
   }
 
@@ -390,7 +486,7 @@ class ProductCanvasApp {
     messageDiv.className = 'flex justify-start';
     messageDiv.dataset.messageId = messageId;
     messageDiv.innerHTML = `
-      <div class="chat-bubble-ai relative group streaming-text" data-message-id="${messageId}">
+      <div class="chat-bubble-ai relative streaming-text" data-message-id="${messageId}">
         <div class="typing-cursor"></div>
       </div>
     `;
@@ -417,7 +513,7 @@ class ProductCanvasApp {
     const parsedBeforeText = typeof marked !== 'undefined' ? marked.parse(beforeText) : Utils.escapeHtml(beforeText);
     
     container.innerHTML = `
-      <div class="chat-bubble-ai relative group streaming-text" data-message-id="${container.dataset.messageId}">
+      <div class="chat-bubble-ai relative streaming-text" data-message-id="${container.dataset.messageId}">
         <div>
           ${parsedBeforeText}
           <div class="svg-drawing-placeholder" data-svg-id="${svgId}">
@@ -448,7 +544,7 @@ class ProductCanvasApp {
     const parsedAfterText = typeof marked !== 'undefined' ? marked.parse(afterText) : Utils.escapeHtml(afterText);
     
     container.innerHTML = `
-      <div class="chat-bubble-ai relative group streaming-text" data-message-id="${container.dataset.messageId}">
+      <div class="chat-bubble-ai relative streaming-text" data-message-id="${container.dataset.messageId}">
         <div>
           ${parsedBeforeText}
           <div class="svg-placeholder-block" data-svg-id="${svgId}" onclick="app.viewSVG('${svgId}')">
@@ -459,6 +555,38 @@ class ProductCanvasApp {
       </div>
     `;
     Utils.scrollToBottom(this.chatHistory);
+  }
+
+  buildActionToolbar(messageId, { allowRegenerate = false, allowRollback = true } = {}) {
+    const actions = [];
+
+    if (allowRollback) {
+      actions.push(`
+        <button class="bubble-action-btn flex items-center gap-1 text-xs text-gray-600 hover:text-blue-600 transition-colors" data-action="rollback" onclick="app.rollbackToMessage('${messageId}')">
+          <iconify-icon icon="ph:arrow-u-up-left-bold"></iconify-icon>
+          <span>退回</span>
+        </button>
+      `);
+    }
+
+    if (allowRegenerate) {
+      actions.push(`
+        <button class="bubble-action-btn flex items-center gap-1 text-xs text-gray-600 hover:text-green-600 transition-colors" data-action="regenerate" onclick="app.regenerateMessage('${messageId}')">
+          <iconify-icon icon="ph:arrow-clockwise-bold"></iconify-icon>
+          <span>重新生成</span>
+        </button>
+      `);
+    }
+
+    if (!actions.length) {
+      return '';
+    }
+
+    return `
+      <div class="message-actions flex gap-2 mt-2 pt-2 border-t border-gray-200">
+        ${actions.join('')}
+      </div>
+    `;
   }
 
   // 组装标准化的SVG消息字符串
@@ -487,17 +615,6 @@ class ProductCanvasApp {
 
   // 完成流式消息
   finalizeStreamingMessage(messageId, fullContent, svgId = null) {
-    let container = document.querySelector(`.chat-bubble-ai[data-message-id="${messageId}"]`);
-    if (!container) {
-      const fallback = document.querySelector(`[data-message-id="${messageId}"]`);
-      if (fallback) {
-        container = fallback.classList.contains('chat-bubble-ai')
-          ? fallback
-          : fallback.querySelector('.chat-bubble-ai');
-      }
-    }
-    if (!container) return;
-    
     const parsed = Utils.parseSVGResponse(fullContent);
     const timestamp = new Date().toISOString();
 
@@ -508,28 +625,14 @@ class ProductCanvasApp {
       timestamp
     };
 
-    container.classList.remove('streaming-text');
-    container.setAttribute('data-message-id', messageId);
-
-    const actionFooter = `
-      <div class="flex gap-2 mt-2 pt-2 border-t border-gray-200">
-        <button class="bubble-action-btn flex items-center gap-1 text-xs text-gray-600 hover:text-blue-600 transition-colors" onclick="app.rollbackToMessage('${messageId}')">
-          <iconify-icon icon="ph:arrow-u-up-left-bold"></iconify-icon>
-          <span>退回</span>
-        </button>
-        <button class="bubble-action-btn flex items-center gap-1 text-xs text-gray-600 hover:text-green-600 transition-colors" onclick="app.regenerateMessage('${messageId}')">
-          <iconify-icon icon="ph:arrow-clockwise-bold"></iconify-icon>
-          <span>重新生成</span>
-        </button>
-      </div>
-    `;
+    let targetSvgId = svgId || null;
 
     if (parsed.svgContent && parsed.svgContent.includes('<svg')) {
       const svgBody = parsed.svgContent.trim().endsWith('</svg>')
         ? parsed.svgContent.trim()
-        : `${parsed.svgContent.trim()}\n</svg>`;
+        : `${parsed.svgContent.trim()}
+</svg>`;
 
-      let targetSvgId = svgId || null;
       if (!targetSvgId || !this.svgStorage[this.currentMode][targetSvgId]) {
         targetSvgId = targetSvgId || Utils.generateId('svg');
       }
@@ -541,51 +644,24 @@ class ProductCanvasApp {
         timestamp
       };
 
-      const beforeHtml = parsed.beforeText
-        ? (typeof marked !== 'undefined' ? marked.parse(parsed.beforeText) : Utils.escapeHtml(parsed.beforeText))
-        : '';
-      const afterHtml = parsed.afterText
-        ? (typeof marked !== 'undefined' ? marked.parse(parsed.afterText) : Utils.escapeHtml(parsed.afterText))
-        : '';
-
-      container.innerHTML = `
-        <div>
-          ${beforeHtml}
-          <div class="svg-placeholder-block" data-svg-id="${targetSvgId}" onclick="app.viewSVG('${targetSvgId}')">
-            📊 点击查看 ${this.currentMode === 'canvas' ? '产品画布' : 'SWOT分析'} SVG
-          </div>
-          ${afterHtml}
-        </div>
-        ${actionFooter}
-      `;
-
       this.currentSvgId = targetSvgId;
       this.svgViewer.innerHTML = svgBody;
 
       message.content = this.buildSVGMessageContent(parsed.beforeText, svgBody, parsed.afterText);
     } else {
-      const sanitizedText = fullContent.replace(/^\s*```/, '').replace(/```$/, '').trim();
-      const parsedContent = sanitizedText
-        ? (typeof marked !== 'undefined' ? marked.parse(sanitizedText) : Utils.escapeHtml(sanitizedText))
-        : '';
-
-      container.innerHTML = `
-        <div class="mb-1">
-          ${parsedContent}
-        </div>
-        ${actionFooter}
-      `;
-
+      const sanitizedText = fullContent.replace(/^[\s`]+/, '').replace(/[\s`]+$/, '').trim();
       message.content = sanitizedText;
     }
 
     this.conversationHistory[this.currentMode].push(message);
 
-    // 保存数据
     Utils.storage.set('canvasHistory', this.conversationHistory.canvas);
     Utils.storage.set('swotHistory', this.conversationHistory.swot);
     Utils.storage.set('canvasSVGs', this.svgStorage.canvas);
     Utils.storage.set('swotSVGs', this.svgStorage.swot);
+
+    this.renderConversationHistory();
+    this.renderSvgViewerForMode();
     Utils.scrollToBottom(this.chatHistory);
   }
 
@@ -600,18 +676,8 @@ class ProductCanvasApp {
     
     // 清空当前模式的SVG存储
     this.svgStorage[this.currentMode] = {};
-    
-    // 如果当前显示的是被清空的模式的SVG，清空显示
-    if (this.currentSvgId && this.svgStorage[this.currentMode][this.currentSvgId]) {
-      this.currentSvgId = null;
-      this.svgViewer.innerHTML = `
-        <div id="svg-placeholder" class="text-center text-gray-400">
-          <iconify-icon icon="ph:image-square" class="text-6xl mx-auto text-purple-400"></iconify-icon>
-          <p class="mt-2 font-bold" id="placeholder-text">生成的${this.currentMode === 'canvas' ? '产品画布' : 'SWOT分析'}将在此处显示</p>
-        </div>
-      `;
-    }
-    
+    this.showSvgPlaceholder();
+
     // 保存数据
     Utils.storage.set('canvasHistory', this.conversationHistory.canvas);
     Utils.storage.set('swotHistory', this.conversationHistory.swot);
@@ -620,6 +686,7 @@ class ProductCanvasApp {
     
     // 重新渲染对话历史
     this.renderConversationHistory();
+    this.renderSvgViewerForMode();
   }
 
   // 添加用户消息
@@ -652,31 +719,26 @@ class ProductCanvasApp {
     };
     
     this.conversationHistory[this.currentMode].push(message);
-    
-    // 如果包含SVG，存储SVG内容
+
+    let svgId = null;
     if (parsed.svgContent) {
-      const svgId = Utils.generateId('svg');
+      svgId = Utils.generateId('svg');
       this.svgStorage[this.currentMode][svgId] = {
         content: parsed.svgContent,
-        messageId: messageId,
+        messageId,
         mode: this.currentMode,
         timestamp: new Date().toISOString()
       };
-      
-      Utils.storage.set('canvasSVGs', this.svgStorage.canvas);
-      Utils.storage.set('swotSVGs', this.svgStorage.swot);
       this.viewSVG(svgId);
-      
-      // 渲染包含SVG占位符的消息
-      this.renderMessageWithSVG(message, parsed, svgId);
-    } else {
-      // 渲染普通消息
-      this.renderMessage(message);
     }
-    
-    Utils.scrollToBottom(this.chatHistory);
+
     Utils.storage.set('canvasHistory', this.conversationHistory.canvas);
     Utils.storage.set('swotHistory', this.conversationHistory.swot);
+    Utils.storage.set('canvasSVGs', this.svgStorage.canvas);
+    Utils.storage.set('swotSVGs', this.svgStorage.swot);
+
+    this.renderConversationHistory();
+    this.renderSvgViewerForMode();
   }
 
   // 添加错误消息
@@ -697,9 +759,10 @@ class ProductCanvasApp {
   }
 
   // 渲染消息
-  renderMessage(message) {
+  renderMessage(message, options = {}) {
+    const { allowRegenerate = false, allowRollback = message.type === 'ai' } = options;
     const messageDiv = document.createElement('div');
-    
+
     if (message.type === 'user') {
       messageDiv.className = 'flex justify-end';
       messageDiv.innerHTML = `
@@ -715,58 +778,45 @@ class ProductCanvasApp {
           ${Utils.escapeHtml(message.content)}
         </div>
       `;
-    } else {
+    } else if (message.type === 'ai') {
+      const parsedContent = typeof marked !== 'undefined' ? marked.parse(message.content) : Utils.escapeHtml(message.content);
+      const actions = this.buildActionToolbar(message.id, { allowRegenerate, allowRollback });
       messageDiv.className = 'flex justify-start';
       messageDiv.innerHTML = `
-        <div class="chat-bubble-ai relative group" data-message-id="${message.id}">
+        <div class="chat-bubble-ai relative" data-message-id="${message.id}">
           <div class="mb-1">
-            ${typeof marked !== 'undefined' ? marked.parse(message.content) : Utils.escapeHtml(message.content)}
+            ${parsedContent}
           </div>
-          
-          <div class="flex gap-2 mt-2 pt-2 border-t border-gray-200">
-            <button class="bubble-action-btn flex items-center gap-1 text-xs text-gray-600 hover:text-blue-600 transition-colors" onclick="app.rollbackToMessage('${message.id}')">
-              <iconify-icon icon="ph:arrow-u-up-left-bold"></iconify-icon>
-              <span>退回</span>
-            </button>
-            <button class="bubble-action-btn flex items-center gap-1 text-xs text-gray-600 hover:text-green-600 transition-colors" onclick="app.regenerateMessage('${message.id}')">
-              <iconify-icon icon="ph:arrow-clockwise-bold"></iconify-icon>
-              <span>重新生成</span>
-            </button>
-          </div>
+          ${actions}
         </div>
       `;
     }
-    
+
     this.chatHistory.appendChild(messageDiv);
   }
 
   // 渲染包含SVG的消息
-  renderMessageWithSVG(message, parsed, svgId) {
+  renderMessageWithSVG(message, parsed, svgId, options = {}) {
+    const { allowRegenerate = false, allowRollback = true } = options;
     const messageDiv = document.createElement('div');
+    const beforeHtml = parsed.beforeText ? (typeof marked !== 'undefined' ? marked.parse(parsed.beforeText) : Utils.escapeHtml(parsed.beforeText)) : '';
+    const afterHtml = parsed.afterText ? (typeof marked !== 'undefined' ? marked.parse(parsed.afterText) : Utils.escapeHtml(parsed.afterText)) : '';
+    const actions = this.buildActionToolbar(message.id, { allowRegenerate, allowRollback });
+
     messageDiv.className = 'flex justify-start';
     messageDiv.innerHTML = `
-      <div class="chat-bubble-ai relative group" data-message-id="${message.id}">
+      <div class="chat-bubble-ai relative" data-message-id="${message.id}">
         <div>
-          ${typeof marked !== 'undefined' ? marked.parse(parsed.beforeText) : Utils.escapeHtml(parsed.beforeText)}
+          ${beforeHtml}
           <div class="svg-placeholder-block" data-svg-id="${svgId}" onclick="app.viewSVG('${svgId}')">
             📊 点击查看 ${this.currentMode === 'canvas' ? '产品画布' : 'SWOT分析'} SVG
           </div>
-          ${typeof marked !== 'undefined' ? marked.parse(parsed.afterText) : Utils.escapeHtml(parsed.afterText)}
+          ${afterHtml}
         </div>
-        
-        <div class="flex gap-2 mt-2 pt-2 border-t border-gray-200">
-          <button class="bubble-action-btn flex items-center gap-1 text-xs text-gray-600 hover:text-blue-600 transition-colors" onclick="app.rollbackToMessage('${message.id}')">
-            <iconify-icon icon="ph:arrow-u-up-left-bold"></iconify-icon>
-            <span>退回</span>
-          </button>
-          <button class="bubble-action-btn flex items-center gap-1 text-xs text-gray-600 hover:text-green-600 transition-colors" onclick="app.regenerateMessage('${message.id}')">
-            <iconify-icon icon="ph:arrow-clockwise-bold"></iconify-icon>
-            <span>重新生成</span>
-          </button>
-        </div>
+        ${actions}
       </div>
     `;
-    
+
     this.chatHistory.appendChild(messageDiv);
   }
 
@@ -779,7 +829,15 @@ class ProductCanvasApp {
     const currentSvgStorage = this.svgStorage[this.currentMode] || {};
     let hasStorageUpdate = false;
     let hasHistoryUpdate = false;
-    
+
+    let lastAiMessageId = null;
+    for (let i = currentHistory.length - 1; i >= 0; i--) {
+      if (currentHistory[i].type === 'ai') {
+        lastAiMessageId = currentHistory[i].id;
+        break;
+      }
+    }
+
     for (const message of currentHistory) {
       if (message.type === 'ai') {
         const parsed = Utils.parseSVGResponse(message.content);
@@ -811,11 +869,11 @@ class ProductCanvasApp {
             hasStorageUpdate = true;
             hasHistoryUpdate = true;
           }
-          this.renderMessageWithSVG(message, parsed, svgId);
+          this.renderMessageWithSVG(message, parsed, svgId, { allowRegenerate: message.id === lastAiMessageId });
           continue;
         }
-        
-        this.renderMessage(message);
+
+        this.renderMessage(message, { allowRegenerate: message.id === lastAiMessageId });
       } else {
         this.renderMessage(message);
       }
@@ -862,13 +920,7 @@ class ProductCanvasApp {
           
           // 如果当前显示的是被删除的SVG，清空显示
           if (this.currentSvgId === svgId) {
-            this.currentSvgId = null;
-            this.svgViewer.innerHTML = `
-              <div id="svg-placeholder" class="text-center text-gray-400">
-                <iconify-icon icon="ph:image-square" class="text-6xl mx-auto text-purple-400"></iconify-icon>
-                <p class="mt-2 font-bold" id="placeholder-text">生成的${this.currentMode === 'canvas' ? '产品画布' : 'SWOT分析'}将在此处显示</p>
-              </div>
-            `;
+            this.showSvgPlaceholder();
           }
         }
       }
@@ -885,6 +937,7 @@ class ProductCanvasApp {
     
     // 重新渲染对话历史
     this.renderConversationHistory();
+    this.renderSvgViewerForMode();
   }
 
   // 重新生成消息
@@ -892,8 +945,8 @@ class ProductCanvasApp {
     if (this.isProcessing) return;
     
     this.isProcessing = true;
+    this.setSendButtonState('busy');
     this.sendButton.disabled = true;
-    this.sendButton.innerHTML = '<iconify-icon icon="ph:spinner-gap" class="text-3xl animate-spin"></iconify-icon>';
     
     try {
       // 重新生成响应
@@ -910,8 +963,8 @@ class ProductCanvasApp {
       this.addErrorMessage(error.message);
     } finally {
       this.isProcessing = false;
-      this.sendButton.disabled = false;
-      this.sendButton.innerHTML = '<iconify-icon icon="ph:paper-plane-tilt-fill" class="text-3xl"></iconify-icon>';
+      this.setSendButtonState('idle');
+      this.activeStreamHandle = null;
     }
   }
 

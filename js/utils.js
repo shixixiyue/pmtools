@@ -238,6 +238,15 @@ class StreamProcessor {
     this.onChunk = onChunk;
     this.onComplete = onComplete;
     this.buffer = '';
+    this.completed = false;
+  }
+
+  complete(info = {}) {
+    if (this.completed) return;
+    this.completed = true;
+    if (typeof this.onComplete === 'function') {
+      this.onComplete(info);
+    }
   }
 
   // 处理数据块
@@ -255,7 +264,7 @@ class StreamProcessor {
           if (line.startsWith('data: ')) {
             const data = line.slice(6);
             if (data === '[DONE]') {
-              this.onComplete();
+              this.complete({ aborted: false });
               return;
             }
             
@@ -271,36 +280,56 @@ class StreamProcessor {
 }
 
 // 创建流式请求
-async function createStreamRequest(url, options, onChunk, onComplete) {
+function createStreamRequest(url, options, onChunk, onComplete) {
   const processor = new StreamProcessor(onChunk, onComplete);
-  
-  try {
-    const response = await fetch(url, {
-      ...options,
-      headers: {
-        ...options.headers,
-        'Accept': 'text/event-stream',
-        'Cache-Control': 'no-cache'
+  const controller = new AbortController();
+
+  const fetchPromise = (async () => {
+    try {
+      const response = await fetch(url, {
+        ...options,
+        signal: controller.signal,
+        headers: {
+          ...options.headers,
+          'Accept': 'text/event-stream',
+          'Cache-Control': 'no-cache'
+        }
+      });
+
+      if (!response.ok) {
+        throw new Error(`HTTP ${response.status}: ${response.statusText}`);
       }
-    });
 
-    if (!response.ok) {
-      throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+      const reader = response.body.getReader();
+      const decoder = new TextDecoder();
+
+      while (true) {
+        const { done, value } = await reader.read();
+        if (done) break;
+
+        const chunk = decoder.decode(value, { stream: true });
+        processor.processChunk(chunk);
+        if (processor.completed) {
+          break;
+        }
+      }
+
+      if (!processor.completed) {
+        processor.complete({ aborted: false });
+      }
+    } catch (error) {
+      if (error.name === 'AbortError') {
+        processor.complete({ aborted: true });
+        return;
+      }
+      throw error;
     }
+  })();
 
-    const reader = response.body.getReader();
-    const decoder = new TextDecoder();
-
-    while (true) {
-      const { done, value } = await reader.read();
-      if (done) break;
-
-      const chunk = decoder.decode(value, { stream: true });
-      processor.processChunk(chunk);
-    }
-  } catch (error) {
-    throw error;
-  }
+  return {
+    cancel: () => controller.abort(),
+    finished: fetchPromise
+  };
 }
 
 // 导出工具函数

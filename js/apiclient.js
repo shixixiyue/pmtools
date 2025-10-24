@@ -155,7 +155,7 @@ class APIClient {
       { role: 'user', content: userRequest }
     ];
 
-    return await this.sendChatMessageStream(messages, { maxTokens: 13000 }, onChunk, onComplete);
+    return this.sendChatMessageStream(messages, { maxTokens: 13000 }, onChunk, onComplete);
   }
 
   // 流式生成SWOT分析
@@ -166,7 +166,7 @@ class APIClient {
       { role: 'user', content: userRequest }
     ];
 
-    return await this.sendChatMessageStream(messages, { maxTokens: 13000 }, onChunk, onComplete);
+    return this.sendChatMessageStream(messages, { maxTokens: 13000 }, onChunk, onComplete);
   }
 
   // 流式发送聊天请求
@@ -190,7 +190,7 @@ class APIClient {
     const url = this.config.url.replace('/chat/completions', '/chat/completions');
     
     try {
-      await Utils.createStreamRequest(
+      return Utils.createStreamRequest(
         url,
         {
           method: 'POST',

@@ -219,12 +219,8 @@ body {
 
 /* 气泡操作按钮 */
 .bubble-action-btn {
-  opacity: 0;
-  transition: opacity 0.2s;
-}
-
-.chat-bubble-ai:hover .bubble-action-btn {
   opacity: 1;
+  transition: color 0.2s ease;
 }
 
 /* 小手摇摆动画 */
