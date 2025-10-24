@@ -33,6 +33,8 @@ body {
   color: #1f2937;
   padding: 10px 14px;
   max-width: 85%;
+  max-height: 300px;
+  overflow-y: auto;
   border: 2px solid #10b981;
   box-shadow: 2px 2px 0 rgba(16, 185, 129, 0.3);
 }
@@ -57,6 +59,57 @@ body {
   transform: translateX(2px) translateY(-2px);
   box-shadow: 4px 4px 0 rgba(0,0,0,0.3);
   background: linear-gradient(135deg, #fb923c 0%, #f87171 100%);
+}
+
+/* SVG绘制中状态占位符 */
+.svg-drawing-placeholder {
+  display: block;
+  background: linear-gradient(135deg, #3b82f6 0%, #8b5cf6 100%);
+  color: white;
+  padding: 8px 14px;
+  margin: 8px 0;
+  border: 2px solid #000;
+  box-shadow: 3px 3px 0 rgba(0,0,0,0.25);
+  font-weight: bold;
+  font-size: 13px;
+  cursor: pointer;
+  transition: all 0.2s;
+  text-align: center;
+  position: relative;
+  overflow: hidden;
+}
+
+.svg-drawing-placeholder:hover {
+  transform: translateX(2px) translateY(-2px);
+  box-shadow: 4px 4px 0 rgba(0,0,0,0.3);
+  background: linear-gradient(135deg, #60a5fa 0%, #a78bfa 100%);
+}
+
+/* 绘制中动画效果 */
+@keyframes drawing-pulse {
+  0% { opacity: 1; }
+  50% { opacity: 0.7; }
+  100% { opacity: 1; }
+}
+
+.svg-drawing-placeholder::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: -100%;
+  width: 100%;
+  height: 100%;
+  background: linear-gradient(90deg, transparent, rgba(255,255,255,0.3), transparent);
+  animation: drawing-shine 2s infinite;
+}
+
+@keyframes drawing-shine {
+  0% { left: -100%; }
+  100% { left: 100%; }
+}
+
+.svg-drawing-text {
+  animation: drawing-pulse 1.5s infinite;
 }
 
 /* 气泡操作按钮 */
@@ -179,4 +232,15 @@ body {
   animation: blink 1s infinite;
   color: #667eea;
   font-weight: bold;
+}
+
+/* 清空历史按钮摇动动画 */
+@keyframes shake {
+  0%, 100% { transform: translateX(0); }
+  10%, 30%, 50%, 70%, 90% { transform: translateX(-2px); }
+  20%, 40%, 60%, 80% { transform: translateX(2px); }
+}
+
+.clear-history-btn:hover iconify-icon {
+  animation: shake 0.5s ease-in-out;
 }

@@ -27,7 +27,7 @@ class ProductCanvasApp {
     // 对话相关
     this.chatInput = document.getElementById('chat-input');
     this.sendButton = document.getElementById('send-button');
-    this.clearButton = document.getElementById('clear-button');
+    this.clearHistoryBtn = document.getElementById('clear-history-btn');
     this.chatHistory = document.getElementById('chat-history');
     
     // SVG显示
@@ -60,7 +60,7 @@ class ProductCanvasApp {
     
     // 发送消息
     this.sendButton.addEventListener('click', () => this.sendMessage());
-    this.clearButton.addEventListener('click', () => this.clearCurrentConversation());
+    this.clearHistoryBtn.addEventListener('click', () => this.clearCurrentConversation());
     
     // 输入框事件
     this.chatInput.addEventListener('keypress', (e) => {
@@ -206,18 +206,111 @@ class ProductCanvasApp {
     Utils.scrollToBottom(this.chatHistory);
     
     let fullContent = '';
+    let svgStarted = false;
+    let svgContent = '';
+    let svgId = null;
+    let beforeText = '';
     
     const onChunk = (chunk) => {
       if (chunk.choices && chunk.choices[0] && chunk.choices[0].delta) {
         const content = chunk.choices[0].delta.content || '';
         fullContent += content;
-        this.updateStreamingMessage(messageContainer, fullContent);
+        
+        // 检测SVG开始标记
+        if (!svgStarted && (fullContent.includes('```svg') || fullContent.includes('``` <svg') || fullContent.includes('```\n<svg'))) {
+          svgStarted = true;
+          svgId = Utils.generateId('svg');
+          
+          // 提取SVG开始前的文本
+          const svgStartIndex = Math.max(
+            fullContent.indexOf('```svg'),
+            fullContent.indexOf('``` <svg')
+          );
+          beforeText = fullContent.substring(0, svgStartIndex);
+          
+          // 显示绘制中占位符
+          this.updateStreamingMessageWithPlaceholder(messageContainer, beforeText, svgId);
+          
+          // 初始化SVG显示区域
+          this.svgViewer.innerHTML = `
+            <div class="flex items-center justify-center h-full">
+              <div class="text-center">
+                <iconify-icon icon="ph:spinner-gap" class="text-6xl text-purple-500 animate-spin"></iconify-icon>
+                <p class="mt-4 font-bold text-gray-600">正在绘制${this.currentMode === 'canvas' ? '产品画布' : 'SWOT分析'}...</p>
+              </div>
+            </div>
+          `;
+        }
+        
+        // 如果SVG已经开始，收集SVG内容
+        if (svgStarted) {
+          // 检查是否有SVG结束标记
+          if (fullContent.includes('</svg>')) {
+            const svgEndIndex = fullContent.indexOf('</svg>') + 6; // +6 是 '</svg>' 的长度
+            
+            // 提取完整的SVG内容
+            const svgStartIndex = Math.max(
+              fullContent.indexOf('```svg'),
+              fullContent.indexOf('``` <svg')
+            );
+            let svgWithMarkers = fullContent.substring(svgStartIndex, svgEndIndex);
+            
+            // 移除代码块标记
+            svgContent = svgWithMarkers.replace(/```svg\s*/, '').replace(/```\s*$/, '').trim();
+            
+            // 补全SVG结束标签（如果没有的话）
+            if (!svgContent.endsWith('</svg>')) {
+              svgContent += '</svg>';
+            }
+            
+            // 实时显示SVG
+            this.svgViewer.innerHTML = svgContent;
+            
+            // 存储SVG内容
+            this.svgStorage[this.currentMode][svgId] = {
+              content: svgContent,
+              messageId: messageId,
+              mode: this.currentMode,
+              timestamp: new Date().toISOString()
+            };
+            
+            // 更新占位符为可点击状态
+            this.updatePlaceholderToClickable(messageContainer, svgId);
+            
+            // 重置SVG状态，继续接收剩余文本
+            svgStarted = false;
+            const afterText = fullContent.substring(svgEndIndex);
+            this.updateStreamingMessageAfterSVG(messageContainer, beforeText, svgId, afterText);
+          } else if (svgContent) {
+            // SVG还在继续，更新内容
+            const svgStartIndex = Math.max(
+              fullContent.indexOf('```svg'),
+              fullContent.indexOf('``` <svg')
+            );
+            let svgWithMarkers = fullContent.substring(svgStartIndex);
+            
+            // 移除代码块标记
+            svgContent = svgWithMarkers.replace(/```svg\s*/, '').replace(/```\s*$/, '').trim();
+            
+            // 补全SVG结束标签以便实时显示
+            let tempSvgContent = svgContent;
+            if (!tempSvgContent.endsWith('</svg>')) {
+              tempSvgContent += '</svg>';
+            }
+            
+            // 实时更新SVG显示
+            this.svgViewer.innerHTML = tempSvgContent;
+          }
+        } else {
+          // 普通文本更新
+          this.updateStreamingMessage(messageContainer, fullContent);
+        }
       }
     };
     
     const onComplete = () => {
       // 流式接收完成，处理完整消息
-      this.finalizeStreamingMessage(messageId, fullContent);
+      this.finalizeStreamingMessage(messageId, fullContent, svgId, beforeText);
       
       this.isProcessing = false;
       this.sendButton.disabled = false;
@@ -252,13 +345,54 @@ class ProductCanvasApp {
       Utils.scrollToBottom(this.chatHistory);
     }
   }
+  
+  // 更新流式消息内容并显示SVG占位符
+  updateStreamingMessageWithPlaceholder(container, beforeText, svgId) {
+    container.innerHTML = `
+      <div class="chat-bubble-ai relative group streaming-text" data-message-id="${container.dataset.messageId}">
+        <div>
+          ${Utils.escapeHtml(beforeText)}
+          <div class="svg-drawing-placeholder" data-svg-id="${svgId}">
+            <span class="svg-drawing-text">🎨 正在绘制${this.currentMode === 'canvas' ? '产品画布' : 'SWOT分析'}...</span>
+          </div>
+          <div class="typing-cursor"></div>
+        </div>
+      </div>
+    `;
+    Utils.scrollToBottom(this.chatHistory);
+  }
+  
+  // 更新占位符为可点击状态
+  updatePlaceholderToClickable(container, svgId) {
+    const placeholder = container.querySelector('.svg-drawing-placeholder');
+    if (placeholder) {
+      placeholder.classList.remove('svg-drawing-placeholder');
+      placeholder.classList.add('svg-placeholder-block');
+      placeholder.innerHTML = `📊 点击查看${this.currentMode === 'canvas' ? '产品画布' : 'SWOT分析'} SVG`;
+      placeholder.setAttribute('onclick', `app.viewSVG('${svgId}')`);
+    }
+  }
+  
+  // 更新SVG后的消息内容
+  updateStreamingMessageAfterSVG(container, beforeText, svgId, afterText) {
+    container.innerHTML = `
+      <div class="chat-bubble-ai relative group streaming-text" data-message-id="${container.dataset.messageId}">
+        <div>
+          ${Utils.escapeHtml(beforeText)}
+          <div class="svg-placeholder-block" data-svg-id="${svgId}" onclick="app.viewSVG('${svgId}')">
+            📊 点击查看${this.currentMode === 'canvas' ? '产品画布' : 'SWOT分析'} SVG
+          </div>
+          <div class="typing-cursor">${Utils.escapeHtml(afterText)}</div>
+        </div>
+      </div>
+    `;
+    Utils.scrollToBottom(this.chatHistory);
+  }
 
   // 完成流式消息
-  finalizeStreamingMessage(messageId, fullContent) {
+  finalizeStreamingMessage(messageId, fullContent, svgId = null, beforeText = '') {
     const container = document.querySelector(`[data-message-id="${messageId}"]`);
     if (!container) return;
-    
-    const parsed = Utils.parseSVGResponse(fullContent);
     
     const message = {
       id: messageId,
@@ -269,26 +403,23 @@ class ProductCanvasApp {
     
     this.conversationHistory[this.currentMode].push(message);
     
-    // 如果包含SVG，存储SVG内容
-    if (parsed.svgContent) {
-      const svgId = Utils.generateId('svg');
-      this.svgStorage[this.currentMode][svgId] = {
-        content: parsed.svgContent,
-        messageId: messageId,
-        mode: this.currentMode,
-        timestamp: new Date().toISOString()
-      };
-      
-      this.viewSVG(svgId);
+    // 如果已经有SVG ID（从流式处理中获得），直接使用
+    if (svgId && this.svgStorage[this.currentMode][svgId]) {
+      // 提取SVG后的文本
+      let afterText = '';
+      if (fullContent.includes('</svg>')) {
+        const svgEndIndex = fullContent.indexOf('</svg>') + 6;
+        afterText = fullContent.substring(svgEndIndex);
+      }
       
       // 更新容器内容为包含SVG的消息
       container.innerHTML = `
         <div>
-          ${Utils.escapeHtml(parsed.beforeText)}
+          ${Utils.escapeHtml(beforeText)}
           <div class="svg-placeholder-block" data-svg-id="${svgId}" onclick="app.viewSVG('${svgId}')">
             📊 点击查看 ${this.currentMode === 'canvas' ? '产品画布' : 'SWOT分析'} SVG
           </div>
-          ${Utils.escapeHtml(parsed.afterText)}
+          ${Utils.escapeHtml(afterText)}
         </div>
         
         <div class="flex gap-2 mt-2 pt-2 border-t border-gray-200">
@@ -303,28 +434,68 @@ class ProductCanvasApp {
         </div>
       `;
     } else {
-      // 更新容器内容为普通消息
-      container.innerHTML = `
-        <div class="mb-1">
-          ${Utils.escapeHtml(fullContent)}
-        </div>
+      // 使用原有的解析方法作为后备
+      const parsed = Utils.parseSVGResponse(fullContent);
+      
+      // 如果包含SVG，存储SVG内容
+      if (parsed.svgContent) {
+        const newSvgId = Utils.generateId('svg');
+        this.svgStorage[this.currentMode][newSvgId] = {
+          content: parsed.svgContent,
+          messageId: messageId,
+          mode: this.currentMode,
+          timestamp: new Date().toISOString()
+        };
         
-        <div class="flex gap-2 mt-2 pt-2 border-t border-gray-200">
-          <button class="bubble-action-btn flex items-center gap-1 text-xs text-gray-600 hover:text-blue-600 transition-colors" onclick="app.rollbackToMessage('${messageId}')">
-            <iconify-icon icon="ph:arrow-u-up-left-bold"></iconify-icon>
-            <span>退回</span>
-          </button>
-          <button class="bubble-action-btn flex items-center gap-1 text-xs text-gray-600 hover:text-green-600 transition-colors" onclick="app.regenerateMessage('${messageId}')">
-            <iconify-icon icon="ph:arrow-clockwise-bold"></iconify-icon>
-            <span>重新生成</span>
-          </button>
-        </div>
-      `;
+        this.viewSVG(newSvgId);
+        
+        // 更新容器内容为包含SVG的消息
+        container.innerHTML = `
+          <div>
+            ${Utils.escapeHtml(parsed.beforeText)}
+            <div class="svg-placeholder-block" data-svg-id="${newSvgId}" onclick="app.viewSVG('${newSvgId}')">
+              📊 点击查看 ${this.currentMode === 'canvas' ? '产品画布' : 'SWOT分析'} SVG
+            </div>
+            ${Utils.escapeHtml(parsed.afterText)}
+          </div>
+          
+          <div class="flex gap-2 mt-2 pt-2 border-t border-gray-200">
+            <button class="bubble-action-btn flex items-center gap-1 text-xs text-gray-600 hover:text-blue-600 transition-colors" onclick="app.rollbackToMessage('${messageId}')">
+              <iconify-icon icon="ph:arrow-u-up-left-bold"></iconify-icon>
+              <span>退回</span>
+            </button>
+            <button class="bubble-action-btn flex items-center gap-1 text-xs text-gray-600 hover:text-green-600 transition-colors" onclick="app.regenerateMessage('${messageId}')">
+              <iconify-icon icon="ph:arrow-clockwise-bold"></iconify-icon>
+              <span>重新生成</span>
+            </button>
+          </div>
+        `;
+      } else {
+        // 更新容器内容为普通消息
+        container.innerHTML = `
+          <div class="mb-1">
+            ${Utils.escapeHtml(fullContent)}
+          </div>
+          
+          <div class="flex gap-2 mt-2 pt-2 border-t border-gray-200">
+            <button class="bubble-action-btn flex items-center gap-1 text-xs text-gray-600 hover:text-blue-600 transition-colors" onclick="app.rollbackToMessage('${messageId}')">
+              <iconify-icon icon="ph:arrow-u-up-left-bold"></iconify-icon>
+              <span>退回</span>
+            </button>
+            <button class="bubble-action-btn flex items-center gap-1 text-xs text-gray-600 hover:text-green-600 transition-colors" onclick="app.regenerateMessage('${messageId}')">
+              <iconify-icon icon="ph:arrow-clockwise-bold"></iconify-icon>
+              <span>重新生成</span>
+            </button>
+          </div>
+        `;
+      }
     }
     
     // 保存数据
-    Utils.storage.set(`conversationHistory`, this.conversationHistory);
-    Utils.storage.set(`svgStorage`, this.svgStorage);
+    Utils.storage.set('canvasHistory', this.conversationHistory.canvas);
+    Utils.storage.set('swotHistory', this.conversationHistory.swot);
+    Utils.storage.set('canvasSVGs', this.svgStorage.canvas);
+    Utils.storage.set('swotSVGs', this.svgStorage.swot);
   }
 
   // 清空当前对话
@@ -351,8 +522,10 @@ class ProductCanvasApp {
     }
     
     // 保存数据
-    Utils.storage.set('conversationHistory', this.conversationHistory);
-    Utils.storage.set('svgStorage', this.svgStorage);
+    Utils.storage.set('canvasHistory', this.conversationHistory.canvas);
+    Utils.storage.set('swotHistory', this.conversationHistory.swot);
+    Utils.storage.set('canvasSVGs', this.svgStorage.canvas);
+    Utils.storage.set('swotSVGs', this.svgStorage.swot);
     
     // 重新渲染对话历史
     this.renderConversationHistory();
@@ -371,7 +544,8 @@ class ProductCanvasApp {
     this.conversationHistory[this.currentMode].push(message);
     this.renderMessage(message);
     Utils.scrollToBottom(this.chatHistory);
-    Utils.storage.set('conversationHistory', this.conversationHistory);
+    Utils.storage.set('canvasHistory', this.conversationHistory.canvas);
+    Utils.storage.set('swotHistory', this.conversationHistory.swot);
   }
 
   // 添加AI消息（非流式，保留用于错误情况）
@@ -398,7 +572,8 @@ class ProductCanvasApp {
         timestamp: new Date().toISOString()
       };
       
-      Utils.storage.set('svgStorage', this.svgStorage);
+      Utils.storage.set('canvasSVGs', this.svgStorage.canvas);
+      Utils.storage.set('swotSVGs', this.svgStorage.swot);
       this.viewSVG(svgId);
       
       // 渲染包含SVG占位符的消息
@@ -409,7 +584,8 @@ class ProductCanvasApp {
     }
     
     Utils.scrollToBottom(this.chatHistory);
-    Utils.storage.set('conversationHistory', this.conversationHistory);
+    Utils.storage.set('canvasHistory', this.conversationHistory.canvas);
+    Utils.storage.set('swotHistory', this.conversationHistory.swot);
   }
 
   // 添加错误消息
@@ -425,7 +601,8 @@ class ProductCanvasApp {
     this.conversationHistory[this.currentMode].push(message);
     this.renderMessage(message);
     Utils.scrollToBottom(this.chatHistory);
-    Utils.storage.set('conversationHistory', this.conversationHistory);
+    Utils.storage.set('canvasHistory', this.conversationHistory.canvas);
+    Utils.storage.set('swotHistory', this.conversationHistory.swot);
   }
 
   // 渲染消息
@@ -506,13 +683,17 @@ class ProductCanvasApp {
   renderConversationHistory() {
     this.chatHistory.innerHTML = '';
     
-    for (const message of this.conversationHistory) {
+    // 获取当前模式的对话历史
+    const currentHistory = this.conversationHistory[this.currentMode] || [];
+    
+    for (const message of currentHistory) {
       if (message.type === 'ai') {
         const parsed = Utils.parseSVGResponse(message.content);
         
         // 查找对应的SVG
         let svgId = null;
-        for (const [id, svg] of Object.entries(this.svgStorage)) {
+        const currentSvgStorage = this.svgStorage[this.currentMode] || {};
+        for (const [id, svg] of Object.entries(currentSvgStorage)) {
           if (svg.messageId === message.id) {
             svgId = id;
             break;
@@ -532,29 +713,29 @@ class ProductCanvasApp {
 
   // 显示SVG
   viewSVG(svgId) {
-    if (!this.svgStorage[svgId]) {
+    if (!this.svgStorage[this.currentMode][svgId]) {
       console.error('SVG not found:', svgId);
       return;
     }
     
     this.currentSvgId = svgId;
-    const svgContent = this.svgStorage[svgId].content;
+    const svgContent = this.svgStorage[this.currentMode][svgId].content;
     this.svgViewer.innerHTML = svgContent;
   }
 
   // 退回到指定消息
   rollbackToMessage(messageId) {
-    const messageIndex = this.conversationHistory.findIndex(msg => msg.id === messageId);
+    const messageIndex = this.conversationHistory[this.currentMode].findIndex(msg => msg.id === messageId);
     if (messageIndex === -1) return;
     
     // 删除指定消息之后的所有消息
-    const messagesToRemove = this.conversationHistory.slice(messageIndex + 1);
+    const messagesToRemove = this.conversationHistory[this.currentMode].slice(messageIndex + 1);
     
     // 删除相关的SVG
     for (const message of messagesToRemove) {
-      for (const [svgId, svg] of Object.entries(this.svgStorage)) {
+      for (const [svgId, svg] of Object.entries(this.svgStorage[this.currentMode])) {
         if (svg.messageId === message.id) {
-          delete this.svgStorage[svgId];
+          delete this.svgStorage[this.currentMode][svgId];
           
           // 如果当前显示的是被删除的SVG，清空显示
           if (this.currentSvgId === svgId) {
@@ -571,11 +752,13 @@ class ProductCanvasApp {
     }
     
     // 更新对话历史
-    this.conversationHistory = this.conversationHistory.slice(0, messageIndex + 1);
+    this.conversationHistory[this.currentMode] = this.conversationHistory[this.currentMode].slice(0, messageIndex + 1);
     
     // 保存数据
-    Utils.storage.set('conversationHistory', this.conversationHistory);
-    Utils.storage.set('svgStorage', this.svgStorage);
+    Utils.storage.set('canvasHistory', this.conversationHistory.canvas);
+    Utils.storage.set('swotHistory', this.conversationHistory.swot);
+    Utils.storage.set('canvasSVGs', this.svgStorage.canvas);
+    Utils.storage.set('swotSVGs', this.svgStorage.swot);
     
     // 重新渲染对话历史
     this.renderConversationHistory();
@@ -591,7 +774,7 @@ class ProductCanvasApp {
     
     try {
       // 重新生成响应
-      const response = await window.apiClient.regenerateResponse(messageId, this.conversationHistory);
+      const response = await window.apiClient.regenerateResponse(messageId, this.conversationHistory[this.currentMode]);
       
       // 退回到指定消息
       this.rollbackToMessage(messageId);
@@ -616,7 +799,7 @@ class ProductCanvasApp {
       return;
     }
     
-    const svgContent = this.svgStorage[this.currentSvgId].content;
+    const svgContent = this.svgStorage[this.currentMode][this.currentSvgId].content;
     const filename = `${this.currentMode}-${Utils.formatDateTime().replace(/[/:]/g, '-')}.svg`;
     Utils.downloadFile(svgContent, filename, 'image/svg+xml');
   }
@@ -640,7 +823,7 @@ class ProductCanvasApp {
       return;
     }
     
-    const svgContent = this.svgStorage[this.currentSvgId].content;
+    const svgContent = this.svgStorage[this.currentMode][this.currentSvgId].content;
     
     // 创建代码查看模态窗
     const modal = document.createElement('div');
