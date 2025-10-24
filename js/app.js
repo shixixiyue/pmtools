@@ -2,6 +2,17 @@
  * 应用核心逻辑
  */
 
+// 配置Markdown解析器
+if (typeof marked !== 'undefined') {
+  marked.setOptions({
+    breaks: true, // 支持换行
+    gfm: true, // 支持GitHub风格的Markdown
+    sanitize: false, // 允许HTML（因为我们自己处理SVG）
+    smartLists: true, // 智能列表
+    smartypants: true // 智能标点
+  });
+}
+
 class ProductCanvasApp {
   constructor() {
     this.currentMode = 'canvas'; // 'canvas' 或 'swot'
@@ -217,29 +228,30 @@ class ProductCanvasApp {
         fullContent += content;
         
         // 检测SVG开始标记
-        if (!svgStarted && (fullContent.includes('```svg') || fullContent.includes('``` <svg') || fullContent.includes('```\n<svg'))) {
-          svgStarted = true;
-          svgId = Utils.generateId('svg');
-          
-          // 提取SVG开始前的文本
-          const svgStartIndex = Math.max(
-            fullContent.indexOf('```svg'),
-            fullContent.indexOf('``` <svg')
-          );
-          beforeText = fullContent.substring(0, svgStartIndex);
-          
-          // 显示绘制中占位符
-          this.updateStreamingMessageWithPlaceholder(messageContainer, beforeText, svgId);
-          
-          // 初始化SVG显示区域
-          this.svgViewer.innerHTML = `
-            <div class="flex items-center justify-center h-full">
-              <div class="text-center">
-                <iconify-icon icon="ph:spinner-gap" class="text-6xl text-purple-500 animate-spin"></iconify-icon>
-                <p class="mt-4 font-bold text-gray-600">正在绘制${this.currentMode === 'canvas' ? '产品画布' : 'SWOT分析'}...</p>
+        if (!svgStarted) {
+          // 使用正则表达式更准确地检测SVG代码块开始
+          const svgStartMatch = fullContent.match(/```(?:svg)?\s*<svg[\s\S]*?>/i);
+          if (svgStartMatch) {
+            svgStarted = true;
+            svgId = Utils.generateId('svg');
+            
+            // 提取SVG开始前的文本
+            const svgStartIndex = svgStartMatch.index;
+            beforeText = fullContent.substring(0, svgStartIndex);
+            
+            // 显示绘制中占位符
+            this.updateStreamingMessageWithPlaceholder(messageContainer, beforeText, svgId);
+            
+            // 初始化SVG显示区域
+            this.svgViewer.innerHTML = `
+              <div class="flex items-center justify-center h-full">
+                <div class="text-center">
+                  <iconify-icon icon="ph:spinner-gap" class="text-6xl text-purple-500 animate-spin"></iconify-icon>
+                  <p class="mt-4 font-bold text-gray-600">正在绘制${this.currentMode === 'canvas' ? '产品画布' : 'SWOT分析'}...</p>
+                </div>
               </div>
-            </div>
-          `;
+            `;
+          }
         }
         
         // 如果SVG已经开始，收集SVG内容
@@ -249,57 +261,57 @@ class ProductCanvasApp {
             const svgEndIndex = fullContent.indexOf('</svg>') + 6; // +6 是 '</svg>' 的长度
             
             // 提取完整的SVG内容
-            const svgStartIndex = Math.max(
-              fullContent.indexOf('```svg'),
-              fullContent.indexOf('``` <svg')
-            );
-            let svgWithMarkers = fullContent.substring(svgStartIndex, svgEndIndex);
-            
-            // 移除代码块标记
-            svgContent = svgWithMarkers.replace(/```svg\s*/, '').replace(/```\s*$/, '').trim();
-            
-            // 补全SVG结束标签（如果没有的话）
-            if (!svgContent.endsWith('</svg>')) {
-              svgContent += '</svg>';
+            const svgStartMatch = fullContent.match(/```(?:svg)?\s*<svg[\s\S]*?>/i);
+            if (svgStartMatch) {
+              const svgStartIndex = svgStartMatch.index;
+              let svgWithMarkers = fullContent.substring(svgStartIndex, svgEndIndex);
+              
+              // 移除代码块标记
+              svgContent = svgWithMarkers.replace(/```(?:svg)?\s*/, '').replace(/```$/, '').trim();
+              
+              // 补全SVG结束标签（如果没有的话）
+              if (!svgContent.endsWith('</svg>')) {
+                svgContent += '</svg>';
+              }
+              
+              // 实时显示SVG
+              this.svgViewer.innerHTML = svgContent;
+              
+              // 存储SVG内容
+              this.svgStorage[this.currentMode][svgId] = {
+                content: svgContent,
+                messageId: messageId,
+                mode: this.currentMode,
+                timestamp: new Date().toISOString()
+              };
+              
+              // 更新占位符为可点击状态
+              this.updatePlaceholderToClickable(messageContainer, svgId);
+              
+              // 重置SVG状态，继续接收剩余文本
+              svgStarted = false;
+              const afterText = fullContent.substring(svgEndIndex);
+              this.updateStreamingMessageAfterSVG(messageContainer, beforeText, svgId, afterText);
             }
-            
-            // 实时显示SVG
-            this.svgViewer.innerHTML = svgContent;
-            
-            // 存储SVG内容
-            this.svgStorage[this.currentMode][svgId] = {
-              content: svgContent,
-              messageId: messageId,
-              mode: this.currentMode,
-              timestamp: new Date().toISOString()
-            };
-            
-            // 更新占位符为可点击状态
-            this.updatePlaceholderToClickable(messageContainer, svgId);
-            
-            // 重置SVG状态，继续接收剩余文本
-            svgStarted = false;
-            const afterText = fullContent.substring(svgEndIndex);
-            this.updateStreamingMessageAfterSVG(messageContainer, beforeText, svgId, afterText);
-          } else if (svgContent) {
+          } else {
             // SVG还在继续，更新内容
-            const svgStartIndex = Math.max(
-              fullContent.indexOf('```svg'),
-              fullContent.indexOf('``` <svg')
-            );
-            let svgWithMarkers = fullContent.substring(svgStartIndex);
-            
-            // 移除代码块标记
-            svgContent = svgWithMarkers.replace(/```svg\s*/, '').replace(/```\s*$/, '').trim();
-            
-            // 补全SVG结束标签以便实时显示
-            let tempSvgContent = svgContent;
-            if (!tempSvgContent.endsWith('</svg>')) {
-              tempSvgContent += '</svg>';
+            const svgStartMatch = fullContent.match(/```(?:svg)?\s*<svg[\s\S]*?>/i);
+            if (svgStartMatch) {
+              const svgStartIndex = svgStartMatch.index;
+              let svgWithMarkers = fullContent.substring(svgStartIndex);
+              
+              // 移除代码块标记
+              svgContent = svgWithMarkers.replace(/```(?:svg)?\s*/, '').replace(/```$/, '').trim();
+              
+              // 补全SVG结束标签以便实时显示
+              let tempSvgContent = svgContent;
+              if (!tempSvgContent.endsWith('</svg>')) {
+                tempSvgContent += '</svg>';
+              }
+              
+              // 实时更新SVG显示
+              this.svgViewer.innerHTML = tempSvgContent;
             }
-            
-            // 实时更新SVG显示
-            this.svgViewer.innerHTML = tempSvgContent;
           }
         } else {
           // 普通文本更新
@@ -341,17 +353,25 @@ class ProductCanvasApp {
   updateStreamingMessage(container, content) {
     const contentDiv = container.querySelector('.typing-cursor');
     if (contentDiv) {
-      contentDiv.textContent = content;
+      // 使用Markdown解析内容
+      if (typeof marked !== 'undefined') {
+        contentDiv.innerHTML = marked.parse(content);
+      } else {
+        contentDiv.textContent = content;
+      }
       Utils.scrollToBottom(this.chatHistory);
     }
   }
   
   // 更新流式消息内容并显示SVG占位符
   updateStreamingMessageWithPlaceholder(container, beforeText, svgId) {
+    // 使用Markdown解析beforeText
+    const parsedBeforeText = typeof marked !== 'undefined' ? marked.parse(beforeText) : Utils.escapeHtml(beforeText);
+    
     container.innerHTML = `
       <div class="chat-bubble-ai relative group streaming-text" data-message-id="${container.dataset.messageId}">
         <div>
-          ${Utils.escapeHtml(beforeText)}
+          ${parsedBeforeText}
           <div class="svg-drawing-placeholder" data-svg-id="${svgId}">
             <span class="svg-drawing-text">🎨 正在绘制${this.currentMode === 'canvas' ? '产品画布' : 'SWOT分析'}...</span>
           </div>
@@ -375,14 +395,18 @@ class ProductCanvasApp {
   
   // 更新SVG后的消息内容
   updateStreamingMessageAfterSVG(container, beforeText, svgId, afterText) {
+    // 使用Markdown解析文本
+    const parsedBeforeText = typeof marked !== 'undefined' ? marked.parse(beforeText) : Utils.escapeHtml(beforeText);
+    const parsedAfterText = typeof marked !== 'undefined' ? marked.parse(afterText) : Utils.escapeHtml(afterText);
+    
     container.innerHTML = `
       <div class="chat-bubble-ai relative group streaming-text" data-message-id="${container.dataset.messageId}">
         <div>
-          ${Utils.escapeHtml(beforeText)}
+          ${parsedBeforeText}
           <div class="svg-placeholder-block" data-svg-id="${svgId}" onclick="app.viewSVG('${svgId}')">
             📊 点击查看${this.currentMode === 'canvas' ? '产品画布' : 'SWOT分析'} SVG
           </div>
-          <div class="typing-cursor">${Utils.escapeHtml(afterText)}</div>
+          <div class="typing-cursor">${parsedAfterText}</div>
         </div>
       </div>
     `;
@@ -412,14 +436,18 @@ class ProductCanvasApp {
         afterText = fullContent.substring(svgEndIndex);
       }
       
+      // 使用Markdown解析文本
+      const parsedBeforeText = typeof marked !== 'undefined' ? marked.parse(beforeText) : Utils.escapeHtml(beforeText);
+      const parsedAfterText = typeof marked !== 'undefined' ? marked.parse(afterText) : Utils.escapeHtml(afterText);
+      
       // 更新容器内容为包含SVG的消息
       container.innerHTML = `
         <div>
-          ${Utils.escapeHtml(beforeText)}
+          ${parsedBeforeText}
           <div class="svg-placeholder-block" data-svg-id="${svgId}" onclick="app.viewSVG('${svgId}')">
             📊 点击查看 ${this.currentMode === 'canvas' ? '产品画布' : 'SWOT分析'} SVG
           </div>
-          ${Utils.escapeHtml(afterText)}
+          ${parsedAfterText}
         </div>
         
         <div class="flex gap-2 mt-2 pt-2 border-t border-gray-200">
@@ -449,14 +477,18 @@ class ProductCanvasApp {
         
         this.viewSVG(newSvgId);
         
+        // 使用Markdown解析文本
+        const parsedBeforeText = typeof marked !== 'undefined' ? marked.parse(parsed.beforeText) : Utils.escapeHtml(parsed.beforeText);
+        const parsedAfterText = typeof marked !== 'undefined' ? marked.parse(parsed.afterText) : Utils.escapeHtml(parsed.afterText);
+        
         // 更新容器内容为包含SVG的消息
         container.innerHTML = `
           <div>
-            ${Utils.escapeHtml(parsed.beforeText)}
+            ${parsedBeforeText}
             <div class="svg-placeholder-block" data-svg-id="${newSvgId}" onclick="app.viewSVG('${newSvgId}')">
               📊 点击查看 ${this.currentMode === 'canvas' ? '产品画布' : 'SWOT分析'} SVG
             </div>
-            ${Utils.escapeHtml(parsed.afterText)}
+            ${parsedAfterText}
           </div>
           
           <div class="flex gap-2 mt-2 pt-2 border-t border-gray-200">
@@ -471,10 +503,13 @@ class ProductCanvasApp {
           </div>
         `;
       } else {
+        // 使用Markdown解析内容
+        const parsedContent = typeof marked !== 'undefined' ? marked.parse(fullContent) : Utils.escapeHtml(fullContent);
+        
         // 更新容器内容为普通消息
         container.innerHTML = `
           <div class="mb-1">
-            ${Utils.escapeHtml(fullContent)}
+            ${parsedContent}
           </div>
           
           <div class="flex gap-2 mt-2 pt-2 border-t border-gray-200">
@@ -629,7 +664,7 @@ class ProductCanvasApp {
       messageDiv.innerHTML = `
         <div class="chat-bubble-ai relative group" data-message-id="${message.id}">
           <div class="mb-1">
-            ${Utils.escapeHtml(message.content)}
+            ${typeof marked !== 'undefined' ? marked.parse(message.content) : Utils.escapeHtml(message.content)}
           </div>
           
           <div class="flex gap-2 mt-2 pt-2 border-t border-gray-200">
@@ -656,11 +691,11 @@ class ProductCanvasApp {
     messageDiv.innerHTML = `
       <div class="chat-bubble-ai relative group" data-message-id="${message.id}">
         <div>
-          ${Utils.escapeHtml(parsed.beforeText)}
+          ${typeof marked !== 'undefined' ? marked.parse(parsed.beforeText) : Utils.escapeHtml(parsed.beforeText)}
           <div class="svg-placeholder-block" data-svg-id="${svgId}" onclick="app.viewSVG('${svgId}')">
             📊 点击查看 ${this.currentMode === 'canvas' ? '产品画布' : 'SWOT分析'} SVG
           </div>
-          ${Utils.escapeHtml(parsed.afterText)}
+          ${typeof marked !== 'undefined' ? marked.parse(parsed.afterText) : Utils.escapeHtml(parsed.afterText)}
         </div>
         
         <div class="flex gap-2 mt-2 pt-2 border-t border-gray-200">

@@ -39,6 +39,111 @@ body {
   box-shadow: 2px 2px 0 rgba(16, 185, 129, 0.3);
 }
 
+/* Markdown样式 */
+.chat-bubble-ai h1 {
+  font-size: 1.5em;
+  font-weight: bold;
+  margin: 0.5em 0;
+  color: #1f2937;
+}
+
+.chat-bubble-ai h2 {
+  font-size: 1.3em;
+  font-weight: bold;
+  margin: 0.5em 0;
+  color: #1f2937;
+}
+
+.chat-bubble-ai h3 {
+  font-size: 1.1em;
+  font-weight: bold;
+  margin: 0.5em 0;
+  color: #1f2937;
+}
+
+.chat-bubble-ai p {
+  margin: 0.5em 0;
+  line-height: 1.5;
+}
+
+.chat-bubble-ai ul, .chat-bubble-ai ol {
+  margin: 0.5em 0;
+  padding-left: 1.5em;
+}
+
+.chat-bubble-ai li {
+  margin: 0.25em 0;
+  line-height: 1.4;
+}
+
+.chat-bubble-ai code {
+  background: #f3f4f6;
+  padding: 0.2em 0.4em;
+  border-radius: 3px;
+  font-family: 'Courier New', monospace;
+  font-size: 0.9em;
+  color: #e11d48;
+}
+
+.chat-bubble-ai pre {
+  background: #f9fafb;
+  border: 1px solid #e5e7eb;
+  border-radius: 4px;
+  padding: 0.75em;
+  overflow-x: auto;
+  margin: 0.5em 0;
+}
+
+.chat-bubble-ai pre code {
+  background: none;
+  padding: 0;
+  color: #1f2937;
+}
+
+.chat-bubble-ai blockquote {
+  border-left: 4px solid #d1d5db;
+  padding-left: 1em;
+  margin: 0.5em 0;
+  color: #6b7280;
+  font-style: italic;
+}
+
+.chat-bubble-ai strong {
+  font-weight: bold;
+  color: #1f2937;
+}
+
+.chat-bubble-ai em {
+  font-style: italic;
+  color: #4b5563;
+}
+
+.chat-bubble-ai a {
+  color: #3b82f6;
+  text-decoration: underline;
+}
+
+.chat-bubble-ai a:hover {
+  color: #1d4ed8;
+}
+
+.chat-bubble-ai table {
+  border-collapse: collapse;
+  width: 100%;
+  margin: 0.5em 0;
+}
+
+.chat-bubble-ai th, .chat-bubble-ai td {
+  border: 1px solid #e5e7eb;
+  padding: 0.5em;
+  text-align: left;
+}
+
+.chat-bubble-ai th {
+  background: #f9fafb;
+  font-weight: bold;
+}
+
 /* SVG占位符样式 - 块级换行 + 新配色 */
 .svg-placeholder-block {
   display: block;
