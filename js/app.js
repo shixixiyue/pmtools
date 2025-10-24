@@ -341,6 +341,7 @@ class ProductCanvasApp {
   createStreamingMessageContainer(messageId) {
     const messageDiv = document.createElement('div');
     messageDiv.className = 'flex justify-start';
+    messageDiv.dataset.messageId = messageId;
     messageDiv.innerHTML = `
       <div class="chat-bubble-ai relative group streaming-text" data-message-id="${messageId}">
         <div class="typing-cursor"></div>
@@ -415,7 +416,15 @@ class ProductCanvasApp {
 
   // 完成流式消息
   finalizeStreamingMessage(messageId, fullContent, svgId = null, beforeText = '') {
-    const container = document.querySelector(`[data-message-id="${messageId}"]`);
+    let container = document.querySelector(`.chat-bubble-ai[data-message-id="${messageId}"]`);
+    if (!container) {
+      const fallback = document.querySelector(`[data-message-id="${messageId}"]`);
+      if (fallback) {
+        container = fallback.classList.contains('chat-bubble-ai')
+          ? fallback
+          : fallback.querySelector('.chat-bubble-ai');
+      }
+    }
     if (!container) return;
     
     const message = {
