@@ -1,0 +1,182 @@
+body {
+  font-family: 'Inter', sans-serif;
+}
+
+/* 狂野线条效果 */
+.wild-border {
+  border: 3px solid;
+  box-shadow: 4px 4px 0px rgba(0,0,0,0.3);
+}
+
+/* 切换按钮激活状态 */
+.mode-btn-active {
+  transform: translateY(-2px);
+  box-shadow: 0 4px 0 rgba(0,0,0,0.3);
+}
+
+.mode-btn-inactive {
+  opacity: 0.6;
+}
+
+/* 对话气泡样式 */
+.chat-bubble-user {
+  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  color: white;
+  padding: 10px 14px;
+  max-width: 80%;
+  border: 2px solid #000;
+  box-shadow: 2px 2px 0 rgba(0,0,0,0.2);
+}
+
+.chat-bubble-ai {
+  background: #fff;
+  color: #1f2937;
+  padding: 10px 14px;
+  max-width: 85%;
+  border: 2px solid #10b981;
+  box-shadow: 2px 2px 0 rgba(16, 185, 129, 0.3);
+}
+
+/* SVG占位符样式 - 块级换行 + 新配色 */
+.svg-placeholder-block {
+  display: block;
+  background: linear-gradient(135deg, #f59e0b 0%, #ef4444 100%);
+  color: white;
+  padding: 8px 14px;
+  margin: 8px 0;
+  border: 2px solid #000;
+  box-shadow: 3px 3px 0 rgba(0,0,0,0.25);
+  font-weight: bold;
+  font-size: 13px;
+  cursor: pointer;
+  transition: all 0.2s;
+  text-align: center;
+}
+
+.svg-placeholder-block:hover {
+  transform: translateX(2px) translateY(-2px);
+  box-shadow: 4px 4px 0 rgba(0,0,0,0.3);
+  background: linear-gradient(135deg, #fb923c 0%, #f87171 100%);
+}
+
+/* 气泡操作按钮 */
+.bubble-action-btn {
+  opacity: 0;
+  transition: opacity 0.2s;
+}
+
+.chat-bubble-ai:hover .bubble-action-btn {
+  opacity: 1;
+}
+
+/* 小手摇摆动画 */
+@keyframes wave {
+  0%, 100% {transform: translateX(0px) rotate(90deg);}
+  10%, 30%, 50%, 70%, 90% {transform: translateX(-1px) rotate(90deg);}
+  20%, 40%, 60%, 80% {transform: translateX(1px) rotate(90deg);}
+}
+
+.wave-hand {
+  animation: wave 3s ease-in-out infinite;
+  display: inline-block;
+  transform: rotate(90deg);
+}
+
+/* 模态窗样式 */
+.modal-overlay {
+  display: none;
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: rgba(0, 0, 0, 0.7);
+  z-index: 1000;
+  align-items: center;
+  justify-content: center;
+}
+
+.modal-overlay.active {
+  display: flex;
+}
+
+.modal-content {
+  background: white;
+  border: 4px solid #000;
+  box-shadow: 8px 8px 0 rgba(0,0,0,0.4);
+  max-width: 500px;
+  width: 90%;
+  max-height: 90vh;
+  overflow-y: auto;
+}
+
+/* 表单输入框样式 */
+.config-input {
+  width: 100%;
+  padding: 10px;
+  border: 2px solid #000;
+  font-size: 14px;
+  transition: all 0.2s;
+}
+
+.config-input:focus {
+  outline: none;
+  border-color: #667eea;
+  box-shadow: 3px 3px 0 rgba(102, 126, 234, 0.3);
+}
+
+/* 齿轮旋转动画 */
+@keyframes rotate {
+  from { transform: rotate(0deg); }
+  to { transform: rotate(360deg); }
+}
+
+.settings-btn:hover iconify-icon {
+  animation: rotate 1s linear infinite;
+}
+
+/* 自适应高度输入框 */
+.auto-resize-input {
+  min-height: 40px;
+  max-height: 120px; /* 5行左右的高度 */
+  resize: none;
+  overflow-y: auto;
+  line-height: 1.5;
+  padding: 8px 12px;
+}
+
+/* 清空按钮样式 */
+.clear-btn {
+  transition: all 0.2s;
+}
+
+.clear-btn:hover {
+  transform: scale(1.05);
+}
+
+.clear-btn:active {
+  transform: scale(0.95);
+}
+
+/* 流式输出动画 */
+@keyframes fadeIn {
+  from { opacity: 0; transform: translateY(10px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+.streaming-text {
+  animation: fadeIn 0.3s ease-in-out;
+}
+
+/* 打字机效果光标 */
+@keyframes blink {
+  0%, 50% { opacity: 1; }
+  51%, 100% { opacity: 0; }
+}
+
+.typing-cursor::after {
+  content: '|';
+  animation: blink 1s infinite;
+  color: #667eea;
+  font-weight: bold;
+}

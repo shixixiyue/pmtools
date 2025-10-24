@@ -1,0 +1,806 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>产品画布 / SWOT分析</title>
+    <script src="https://cdn.tailwindcss.com/3.4.1"></script>
+    <script src="https://code.iconify.design/iconify-icon/2.1.0/iconify-icon.min.js"></script>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;700;900&display=swap" rel="stylesheet">
+    <style>
+      body {
+        font-family: 'Inter', sans-serif;
+      }
+      
+      /* 狂野线条效果 */
+      .wild-border {
+        border: 3px solid;
+        box-shadow: 4px 4px 0px rgba(0,0,0,0.3);
+      }
+      
+      /* 切换按钮激活状态 */
+      .mode-btn-active {
+        transform: translateY(-2px);
+        box-shadow: 0 4px 0 rgba(0,0,0,0.3);
+      }
+      
+      .mode-btn-inactive {
+        opacity: 0.6;
+      }
+      
+      /* 对话气泡样式 */
+      .chat-bubble-user {
+        background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+        color: white;
+        padding: 10px 14px;
+        max-width: 80%;
+        border: 2px solid #000;
+        box-shadow: 2px 2px 0 rgba(0,0,0,0.2);
+      }
+      
+      .chat-bubble-ai {
+        background: #fff;
+        color: #1f2937;
+        padding: 10px 14px;
+        max-width: 85%;
+        border: 2px solid #10b981;
+        box-shadow: 2px 2px 0 rgba(16, 185, 129, 0.3);
+      }
+      
+      /* SVG占位符样式 - 块级换行 + 新配色 */
+      .svg-placeholder-block {
+        display: block;
+        background: linear-gradient(135deg, #f59e0b 0%, #ef4444 100%);
+        color: white;
+        padding: 8px 14px;
+        margin: 8px 0;
+        border: 2px solid #000;
+        box-shadow: 3px 3px 0 rgba(0,0,0,0.25);
+        font-weight: bold;
+        font-size: 13px;
+        cursor: pointer;
+        transition: all 0.2s;
+        text-align: center;
+      }
+      
+      .svg-placeholder-block:hover {
+        transform: translateX(2px) translateY(-2px);
+        box-shadow: 4px 4px 0 rgba(0,0,0,0.3);
+        background: linear-gradient(135deg, #fb923c 0%, #f87171 100%);
+      }
+      
+      /* 气泡操作按钮 */
+      .bubble-action-btn {
+        opacity: 0;
+        transition: opacity 0.2s;
+      }
+      
+      .chat-bubble-ai:hover .bubble-action-btn {
+        opacity: 1;
+      }
+      
+      /* 小手摇摆动画 */
+      @keyframes wave {
+        0%, 100% {transform: translateX(0px) rotate(90deg);}
+        10%, 30%, 50%, 70%, 90% {transform: translateX(-1px) rotate(90deg);}
+        20%, 40%, 60%, 80% {transform: translateX(1px) rotate(90deg);}
+      }
+      
+      .wave-hand {
+        animation: wave 3s ease-in-out infinite;
+        display: inline-block;
+        transform: rotate(90deg);
+      }
+      
+      /* 模态窗样式 */
+      .modal-overlay {
+        display: none;
+        position: fixed;
+        top: 0;
+        left: 0;
+        right: 0;
+        bottom: 0;
+        background: rgba(0, 0, 0, 0.7);
+        z-index: 1000;
+        align-items: center;
+        justify-content: center;
+      }
+      
+      .modal-overlay.active {
+        display: flex;
+      }
+      
+      .modal-content {
+        background: white;
+        border: 4px solid #000;
+        box-shadow: 8px 8px 0 rgba(0,0,0,0.4);
+        max-width: 500px;
+        width: 90%;
+        max-height: 90vh;
+        overflow-y: auto;
+      }
+      
+      /* 表单输入框样式 */
+      .config-input {
+        width: 100%;
+        padding: 10px;
+        border: 2px solid #000;
+        font-size: 14px;
+        transition: all 0.2s;
+      }
+      
+      .config-input:focus {
+        outline: none;
+        border-color: #667eea;
+        box-shadow: 3px 3px 0 rgba(102, 126, 234, 0.3);
+      }
+      
+      /* 齿轮旋转动画 */
+      @keyframes rotate {
+        from { transform: rotate(0deg); }
+        to { transform: rotate(360deg); }
+      }
+      
+      .settings-btn:hover iconify-icon {
+        animation: rotate 1s linear infinite;
+      }
+    </style>
+</head>
+<body class="bg-gray-100 h-screen flex flex-col">
+
+    <!-- 顶部标题栏 -->
+    <header class="bg-gradient-to-r from-orange-500 to-pink-500 p-3 flex items-center justify-between border-b-4 border-black">
+      <div class="flex items-center space-x-2">
+        <iconify-icon icon="ph:lightning-fill" class="text-3xl text-white"></iconify-icon>
+        <h1 id="page-title" class="text-2xl font-black text-white tracking-tight">产品画布</h1>
+      </div>
+      
+      <!-- 右侧按钮组 -->
+      <div class="flex items-center gap-3">
+        <!-- API配置按钮 -->
+        <button id="settings-btn" class="settings-btn bg-white/20 text-white p-2 border-2 border-white hover:bg-white/30 transition-all" title="API配置">
+          <iconify-icon icon="ph:gear-six-fill" class="text-2xl"></iconify-icon>
+        </button>
+        
+        <span class="text-white font-bold text-sm">点击切换模式</span>
+        <iconify-icon icon="ph:hand-pointing-fill" class="text-2xl text-yellow-300 wave-hand"></iconify-icon>
+        
+        <button id="canvas-mode-btn" class="mode-btn-active bg-white text-orange-600 px-4 py-2 font-bold border-2 border-black hover:bg-orange-50 transition-all duration-200">
+          <iconify-icon icon="ph:pen-nib-duotone" class="align-middle mr-1"></iconify-icon>
+          产品画布
+        </button>
+        <button id="swot-mode-btn" class="mode-btn-inactive bg-white text-purple-600 px-4 py-2 font-bold border-2 border-black hover:bg-purple-50 transition-all duration-200">
+          <iconify-icon icon="ph:chart-bar-duotone" class="align-middle mr-1"></iconify-icon>
+          SWOT分析
+        </button>
+      </div>
+    </header>
+
+    <!-- 主内容区 -->
+    <main class="flex-1 grid grid-cols-1 md:grid-cols-3 gap-4 p-4 overflow-hidden">
+    
+      <!-- 左侧对话面板 -->
+      <div class="md:col-span-1 bg-white wild-border border-cyan-500 flex flex-col">
+        <!-- 对话历史区 -->
+        <div id="chat-history" class="flex-1 p-4 overflow-y-auto space-y-3">
+          
+          <!-- 用户消息 -->
+          <div class="flex justify-end">
+            <div class="chat-bubble-user">
+              帮我生成一个电商产品的画布
+            </div>
+          </div>
+          
+          <!-- AI回复 - 包含SVG占位符（换行） -->
+          <div class="flex justify-start">
+            <div class="chat-bubble-ai relative group" data-message-id="msg-1">
+              <div>
+                好的！我为您生成了一个电商产品画布，
+                <div class="svg-placeholder-block" data-svg-id="svg-1" onclick="viewSVG('svg-1')">
+                  📊 点击查看产品画布 SVG
+                </div>
+                包含了目标用户、核心价值、关键功能等模块。点击上方标签可在右侧查看详细图表。
+              </div>
+              
+              <!-- 悬浮操作按钮 -->
+              <div class="flex gap-2 mt-2 pt-2 border-t border-gray-200">
+                <button class="bubble-action-btn flex items-center gap-1 text-xs text-gray-600 hover:text-blue-600 transition-colors" onclick="rollbackToMessage('msg-1')">
+                  <iconify-icon icon="ph:arrow-u-up-left-bold"></iconify-icon>
+                  <span>退回</span>
+                </button>
+                <button class="bubble-action-btn flex items-center gap-1 text-xs text-gray-600 hover:text-green-600 transition-colors" onclick="regenerateMessage('msg-1')">
+                  <iconify-icon icon="ph:arrow-clockwise-bold"></iconify-icon>
+                  <span>重新生成</span>
+                </button>
+              </div>
+            </div>
+          </div>
+          
+          <!-- 用户消息 -->
+          <div class="flex justify-end">
+            <div class="chat-bubble-user">
+              能不能调整一下配色方案？
+            </div>
+          </div>
+          
+          <!-- AI回复 - 包含SVG占位符（换行） -->
+          <div class="flex justify-start">
+            <div class="chat-bubble-ai relative group" data-message-id="msg-2">
+              <div>
+                当然可以！我已经为您调整了配色，
+                <div class="svg-placeholder-block" data-svg-id="svg-2" onclick="viewSVG('svg-2')">
+                  📊 点击查看优化后的 SVG
+                </div>
+                采用了更加现代和鲜明的色彩组合，同时保持了良好的视觉层次。
+              </div>
+              
+              <!-- 悬浮操作按钮 -->
+              <div class="flex gap-2 mt-2 pt-2 border-t border-gray-200">
+                <button class="bubble-action-btn flex items-center gap-1 text-xs text-gray-600 hover:text-blue-600 transition-colors" onclick="rollbackToMessage('msg-2')">
+                  <iconify-icon icon="ph:arrow-u-up-left-bold"></iconify-icon>
+                  <span>退回</span>
+                </button>
+                <button class="bubble-action-btn flex items-center gap-1 text-xs text-gray-600 hover:text-green-600 transition-colors" onclick="regenerateMessage('msg-2')">
+                  <iconify-icon icon="ph:arrow-clockwise-bold"></iconify-icon>
+                  <span>重新生成</span>
+                </button>
+              </div>
+            </div>
+          </div>
+          
+        </div>
+        
+        <!-- 输入区 -->
+        <div class="p-3 border-t-3 border-gray-300 bg-yellow-50">
+          <div class="relative flex items-center gap-2">
+            <input 
+              id="chat-input" 
+              type="text" 
+              placeholder="输入您的想法，按Enter发送..." 
+              class="flex-1 p-2 border-2 border-gray-800 focus:border-cyan-500 focus:outline-none transition-colors font-medium"
+            />
+            <button id="send-button" class="text-cyan-600 hover:text-cyan-700 transition-colors p-2 hover:scale-110 transform duration-200">
+              <iconify-icon icon="ph:paper-plane-tilt-fill" class="text-3xl"></iconify-icon>
+            </button>
+          </div>
+        </div>
+      </div>
+    
+      <!-- 右侧显示面板 -->
+      <div class="md:col-span-2 bg-white wild-border border-purple-600 flex flex-col">
+        <div id="svg-viewer" class="flex-1 flex items-center justify-center p-4 bg-gradient-to-br from-purple-50 to-pink-50 overflow-auto">
+          <div id="svg-placeholder" class="text-center text-gray-400">
+            <iconify-icon icon="ph:image-square" class="text-6xl mx-auto text-purple-400"></iconify-icon>
+            <p class="mt-2 font-bold" id="placeholder-text">生成的产品画布将在此处显示</p>
+          </div>
+        </div>
+        
+        <!-- 底部操作栏 -->
+        <div class="p-3 border-t-3 border-gray-300 flex justify-end items-center gap-2 bg-gray-800">
+          <button id="download-svg-btn" class="p-2 bg-orange-500 text-white border-2 border-black hover:bg-orange-600 transition-all" title="下载SVG">
+            <iconify-icon icon="mdi:download-outline" class="text-xl"></iconify-icon>
+          </button>
+          <button id="export-image-btn" class="p-2 bg-green-500 text-white border-2 border-black hover:bg-green-600 transition-all" title="导出为图片">
+            <iconify-icon icon="mdi:image-outline" class="text-xl"></iconify-icon>
+          </button>
+          <button id="view-code-btn" class="p-2 bg-blue-500 text-white border-2 border-black hover:bg-blue-600 transition-all" title="查看代码">
+            <iconify-icon icon="mdi:code-tags" class="text-xl"></iconify-icon>
+          </button>
+        </div>
+      </div>
+    
+    </main>
+
+    <!-- API配置模态窗 -->
+    <div id="config-modal" class="modal-overlay">
+      <div class="modal-content">
+        <!-- 模态窗头部 -->
+        <div class="bg-gradient-to-r from-blue-600 to-purple-600 p-4 border-b-4 border-black flex items-center justify-between">
+          <div class="flex items-center gap-2">
+            <iconify-icon icon="ph:plugs-connected-fill" class="text-3xl text-white"></iconify-icon>
+            <h2 class="text-xl font-black text-white">API 配置</h2>
+          </div>
+          <button id="close-modal-btn" class="text-white hover:bg-white/20 p-2 transition-all">
+            <iconify-icon icon="ph:x-bold" class="text-2xl"></iconify-icon>
+          </button>
+        </div>
+        
+        <!-- 模态窗内容 -->
+        <div class="p-6 space-y-4">
+          <!-- API URL -->
+          <div>
+            <label class="block font-bold text-gray-800 mb-2 flex items-center gap-2">
+              <iconify-icon icon="ph:link-bold" class="text-lg text-blue-600"></iconify-icon>
+              API URL
+            </label>
+            <input 
+              id="api-url" 
+              type="text" 
+              placeholder="https://api.example.com/v1/chat" 
+              class="config-input"
+              value=""
+            />
+          </div>
+          
+          <!-- API Key -->
+          <div>
+            <label class="block font-bold text-gray-800 mb-2 flex items-center gap-2">
+              <iconify-icon icon="ph:key-bold" class="text-lg text-green-600"></iconify-icon>
+              API Key
+            </label>
+            <input 
+              id="api-key" 
+              type="password" 
+              placeholder="sk-xxxxxxxxxxxxxxxx" 
+              class="config-input"
+              value=""
+            />
+          </div>
+          
+          <!-- Model -->
+          <div>
+            <label class="block font-bold text-gray-800 mb-2 flex items-center gap-2">
+              <iconify-icon icon="ph:robot-bold" class="text-lg text-purple-600"></iconify-icon>
+              模型 (Model)
+            </label>
+            <input 
+              id="api-model" 
+              type="text" 
+              placeholder="gpt-4-turbo" 
+              class="config-input"
+              value=""
+            />
+          </div>
+          
+          <!-- 状态显示 -->
+          <div id="config-status" class="p-3 border-2 border-gray-300 bg-gray-50 text-sm text-gray-600 hidden">
+            <iconify-icon icon="ph:info" class="align-middle"></iconify-icon>
+            <span id="status-text">等待操作...</span>
+          </div>
+        </div>
+        
+        <!-- 模态窗底部按钮 -->
+        <div class="p-4 border-t-3 border-gray-300 bg-gray-100 flex gap-3 justify-end">
+          <button id="test-api-btn" class="px-4 py-2 bg-yellow-500 text-white font-bold border-2 border-black hover:bg-yellow-600 transition-all flex items-center gap-2">
+            <iconify-icon icon="ph:flask-bold"></iconify-icon>
+            测试连接
+          </button>
+          <button id="save-config-btn" class="px-4 py-2 bg-green-500 text-white font-bold border-2 border-black hover:bg-green-600 transition-all flex items-center gap-2">
+            <iconify-icon icon="ph:floppy-disk-bold"></iconify-icon>
+            保存配置
+          </button>
+        </div>
+      </div>
+    </div>
+
+    <script>
+      // ===== 全局变量 =====
+      let currentMode = 'canvas';
+      let svgStorage = {};
+      let currentSvgId = null;
+      let apiConfig = {
+        url: '',
+        key: '',
+        model: ''
+      };
+      
+      // ===== DOM元素 =====
+      const canvasBtn = document.getElementById('canvas-mode-btn');
+      const swotBtn = document.getElementById('swot-mode-btn');
+      const pageTitle = document.getElementById('page-title');
+      const placeholderText = document.getElementById('placeholder-text');
+      const chatInput = document.getElementById('chat-input');
+      const sendButton = document.getElementById('send-button');
+      const chatHistory = document.getElementById('chat-history');
+      const svgViewer = document.getElementById('svg-viewer');
+      
+      // 模态窗元素
+      const settingsBtn = document.getElementById('settings-btn');
+      const configModal = document.getElementById('config-modal');
+      const closeModalBtn = document.getElementById('close-modal-btn');
+      const apiUrlInput = document.getElementById('api-url');
+      const apiKeyInput = document.getElementById('api-key');
+      const apiModelInput = document.getElementById('api-model');
+      const testApiBtn = document.getElementById('test-api-btn');
+      const saveConfigBtn = document.getElementById('save-config-btn');
+      const configStatus = document.getElementById('config-status');
+      const statusText = document.getElementById('status-text');
+      
+      // ===== 初始化 - 加载已保存的配置 =====
+      function loadConfig() {
+        const saved = localStorage.getItem('apiConfig');
+        if (saved) {
+          apiConfig = JSON.parse(saved);
+          apiUrlInput.value = apiConfig.url || '';
+          apiKeyInput.value = apiConfig.key || '';
+          apiModelInput.value = apiConfig.model || '';
+        }
+      }
+      
+      // ===== 模态窗控制 =====
+      settingsBtn.addEventListener('click', () => {
+        configModal.classList.add('active');
+        loadConfig();
+      });
+      
+      closeModalBtn.addEventListener('click', () => {
+        configModal.classList.remove('active');
+      });
+      
+      configModal.addEventListener('click', (e) => {
+        if (e.target === configModal) {
+          configModal.classList.remove('active');
+        }
+      });
+      
+      // ===== 保存配置 =====
+      saveConfigBtn.addEventListener('click', () => {
+        apiConfig.url = apiUrlInput.value.trim();
+        apiConfig.key = apiKeyInput.value.trim();
+        apiConfig.model = apiModelInput.value.trim();
+        
+        if (!apiConfig.url || !apiConfig.key || !apiConfig.model) {
+          showStatus('⚠️ 请填写所有字段', 'error');
+          return;
+        }
+        
+        localStorage.setItem('apiConfig', JSON.stringify(apiConfig));
+        showStatus('✅ 配置已保存成功！', 'success');
+        
+        setTimeout(() => {
+          configModal.classList.remove('active');
+        }, 1500);
+      });
+      
+      // ===== 测试API连接 =====
+      testApiBtn.addEventListener('click', async () => {
+        const url = apiUrlInput.value.trim();
+        const key = apiKeyInput.value.trim();
+        const model = apiModelInput.value.trim();
+        
+        if (!url || !key || !model) {
+          showStatus('⚠️ 请先填写所有字段', 'error');
+          return;
+        }
+        
+        showStatus('🔄 正在测试连接...', 'loading');
+        
+        // TODO: 实现真实的API测试
+        setTimeout(() => {
+          // 模拟测试成功
+          showStatus('✅ 连接测试成功！', 'success');
+          
+          // 真实实现示例：
+          /*
+          try {
+            const response = await fetch(url, {
+              method: 'POST',
+              headers: {
+                'Authorization': `Bearer ${key}`,
+                'Content-Type': 'application/json'
+              },
+              body: JSON.stringify({
+                model: model,
+                messages: [{role: 'user', content: 'test'}],
+                max_tokens: 5
+              })
+            });
+            
+            if (response.ok) {
+              showStatus('✅ 连接测试成功！', 'success');
+            } else {
+              showStatus('❌ 连接失败: ' + response.statusText, 'error');
+            }
+          } catch (error) {
+            showStatus('❌ 连接失败: ' + error.message, 'error');
+          }
+          */
+        }, 1500);
+      });
+      
+      // ===== 显示状态信息 =====
+      function showStatus(message, type) {
+        configStatus.classList.remove('hidden');
+        statusText.textContent = message;
+        
+        configStatus.classList.remove('border-gray-300', 'bg-gray-50', 'text-gray-600');
+        configStatus.classList.remove('border-green-500', 'bg-green-50', 'text-green-700');
+        configStatus.classList.remove('border-red-500', 'bg-red-50', 'text-red-700');
+        configStatus.classList.remove('border-blue-500', 'bg-blue-50', 'text-blue-700');
+        
+        if (type === 'success') {
+          configStatus.classList.add('border-green-500', 'bg-green-50', 'text-green-700');
+        } else if (type === 'error') {
+          configStatus.classList.add('border-red-500', 'bg-red-50', 'text-red-700');
+        } else if (type === 'loading') {
+          configStatus.classList.add('border-blue-500', 'bg-blue-50', 'text-blue-700');
+        } else {
+          configStatus.classList.add('border-gray-300', 'bg-gray-50', 'text-gray-600');
+        }
+      }
+      
+      // ===== 模式切换 =====
+      canvasBtn.addEventListener('click', () => {
+        if (currentMode !== 'canvas') {
+          currentMode = 'canvas';
+          updateModeUI();
+        }
+      });
+      
+      swotBtn.addEventListener('click', () => {
+        if (currentMode !== 'swot') {
+          currentMode = 'swot';
+          updateModeUI();
+        }
+      });
+      
+      function updateModeUI() {
+        if (currentMode === 'canvas') {
+          canvasBtn.classList.add('mode-btn-active');
+          canvasBtn.classList.remove('mode-btn-inactive');
+          swotBtn.classList.remove('mode-btn-active');
+          swotBtn.classList.add('mode-btn-inactive');
+          pageTitle.textContent = '产品画布';
+          if (!currentSvgId) {
+            placeholderText.textContent = '生成的产品画布将在此处显示';
+          }
+        } else {
+          swotBtn.classList.add('mode-btn-active');
+          swotBtn.classList.remove('mode-btn-inactive');
+          canvasBtn.classList.remove('mode-btn-active');
+          canvasBtn.classList.add('mode-btn-inactive');
+          pageTitle.textContent = 'SWOT分析';
+          if (!currentSvgId) {
+            placeholderText.textContent = '生成的SWOT分析将在此处显示';
+          }
+        }
+      }
+      
+      // ===== 发送消息 =====
+      sendButton.addEventListener('click', sendMessage);
+      chatInput.addEventListener('keypress', (e) => {
+        if (e.key === 'Enter') {
+          sendMessage();
+        }
+      });
+      
+      function sendMessage() {
+        const message = chatInput.value.trim();
+        if (!message) return;
+        
+        // 检查API配置
+        if (!apiConfig.url || !apiConfig.key || !apiConfig.model) {
+          alert('⚠️ 请先配置API设置！点击右上角齿轮图标进行配置。');
+          settingsBtn.click();
+          return;
+        }
+        
+        addUserMessage(message);
+        chatInput.value = '';
+        
+        // 模拟API调用（TODO: 替换为真实调用）
+        setTimeout(() => {
+          simulateAPIResponse(message);
+        }, 1000);
+      }
+      
+      // ===== 添加用户消息 =====
+      function addUserMessage(text) {
+        const messageDiv = document.createElement('div');
+        messageDiv.className = 'flex justify-end';
+        messageDiv.innerHTML = `
+          <div class="chat-bubble-user">
+            ${escapeHtml(text)}
+          </div>
+        `;
+        chatHistory.appendChild(messageDiv);
+        scrollToBottom();
+      }
+      
+      // ===== 添加AI消息 =====
+      function addAIMessage(fullResponse) {
+        const messageId = 'msg-' + Date.now();
+        const parsed = parseSVGResponse(fullResponse);
+        
+        if (parsed.svgContent) {
+          const svgId = 'svg-' + Date.now();
+          svgStorage[svgId] = {
+            content: parsed.svgContent,
+            messageId: messageId
+          };
+          
+          viewSVG(svgId);
+          
+          const messageDiv = document.createElement('div');
+          messageDiv.className = 'flex justify-start';
+          messageDiv.innerHTML = `
+            <div class="chat-bubble-ai relative group" data-message-id="${messageId}">
+              <div>
+                ${escapeHtml(parsed.beforeText)}
+                <div class="svg-placeholder-block" data-svg-id="${svgId}" onclick="viewSVG('${svgId}')">
+                  📊 点击查看 SVG
+                </div>
+                ${escapeHtml(parsed.afterText)}
+              </div>
+              
+              <div class="flex gap-2 mt-2 pt-2 border-t border-gray-200">
+                <button class="bubble-action-btn flex items-center gap-1 text-xs text-gray-600 hover:text-blue-600 transition-colors" onclick="rollbackToMessage('${messageId}')">
+                  <iconify-icon icon="ph:arrow-u-up-left-bold"></iconify-icon>
+                  <span>退回</span>
+                </button>
+                <button class="bubble-action-btn flex items-center gap-1 text-xs text-gray-600 hover:text-green-600 transition-colors" onclick="regenerateMessage('${messageId}')">
+                  <iconify-icon icon="ph:arrow-clockwise-bold"></iconify-icon>
+                  <span>重新生成</span>
+                </button>
+              </div>
+            </div>
+          `;
+          chatHistory.appendChild(messageDiv);
+        } else {
+          const messageDiv = document.createElement('div');
+          messageDiv.className = 'flex justify-start';
+          messageDiv.innerHTML = `
+            <div class="chat-bubble-ai relative group" data-message-id="${messageId}">
+              <div class="mb-1">
+                ${escapeHtml(fullResponse)}
+              </div>
+              
+              <div class="flex gap-2 mt-2 pt-2 border-t border-gray-200">
+                <button class="bubble-action-btn flex items-center gap-1 text-xs text-gray-600 hover:text-blue-600 transition-colors" onclick="rollbackToMessage('${messageId}')">
+                  <icon ify-icon icon="ph:arrow-u-up-left-bold"></iconify-icon>
+                  <span>退回</span>
+                </button>
+                <button class="bubble-action-btn flex items-center gap-1 text-xs text-gray-600 hover:text-green-600 transition-colors" onclick="regenerateMessage('${messageId}')">
+                  <iconify-icon icon="ph:arrow-clockwise-bold"></iconify-icon>
+                  <span>重新生成</span>
+                </button>
+              </div>
+            </div>
+          `;
+          chatHistory.appendChild(messageDiv);
+        }
+        
+        scrollToBottom();
+      }
+      
+      // ===== 解析SVG响应 =====
+      function parseSVGResponse(response) {
+        const svgRegex = /```svg\s*([\s\S]*?)```/i;
+        const match = response.match(svgRegex);
+        
+        if (match) {
+          const svgContent = match[1].trim();
+          const beforeText = response.substring(0, match.index).trim();
+          const afterText = response.substring(match.index + match[0].length).trim();
+          
+          return {
+            svgContent,
+            beforeText,
+            afterText
+          };
+        }
+        
+        return {
+          svgContent: null,
+          beforeText: response,
+          afterText: ''
+        };
+      }
+      
+      // ===== 显示SVG =====
+      function viewSVG(svgId) {
+        if (!svgStorage[svgId]) {
+          console.error('SVG not found:', svgId);
+          return;
+        }
+        
+        currentSvgId = svgId;
+        const svgContent = svgStorage[svgId].content;
+        svgViewer.innerHTML = svgContent;
+      }
+      
+      // ===== 气泡操作功能 =====
+      function rollbackToMessage(messageId) {
+        console.log('退回到消息:', messageId);
+        // TODO: 实现退回逻辑
+      }
+      
+      function regenerateMessage(messageId) {
+        console.log('重新生成消息:', messageId);
+        // TODO: 实现重新生成逻辑
+      }
+      
+      // ===== 底部操作按钮 =====
+      document.getElementById('download-svg-btn').addEventListener('click', () => {
+        if (!currentSvgId) {
+          alert('请先生成SVG图表');
+          return;
+        }
+        
+        const svgContent = svgStorage[currentSvgId].content;
+        const blob = new Blob([svgContent], { type: 'image/svg+xml' });
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = `${currentMode}-${Date.now()}.svg`;
+        a.click();
+        URL.revokeObjectURL(url);
+      });
+      
+      document.getElementById('export-image-btn').addEventListener('click', () => {
+        if (!currentSvgId) {
+          alert('请先生成SVG图表');
+          return;
+        }
+        console.log('导出为图片:', currentSvgId);
+        // TODO: 实现SVG转PNG功能
+      });
+      
+      document.getElementById('view-code-btn').addEventListener('click', () => {
+        if (!currentSvgId) {
+          alert('请先生成SVG图表');
+          return;
+        }
+        
+        const svgContent = svgStorage[currentSvgId].content;
+        alert('SVG代码：\n\n' + svgContent);
+        // TODO: 使用更好的代码展示弹窗
+      });
+      
+      // ===== 工具函数 =====
+      function escapeHtml(text) {
+        const div = document.createElement('div');
+        div.textContent = text;
+        return div.innerHTML;
+      }
+      
+      function scrollToBottom() {
+        chatHistory.scrollTop = chatHistory.scrollHeight;
+      }
+      
+      // ===== 模拟API响应（测试用） =====
+      function simulateAPIResponse(userMessage) {
+        const mockResponses = [
+          `好的！我为您生成了一个${currentMode === 'canvas' ? '产品画布' : 'SWOT分析'}
+\`\`\`svg
+<svg width="600" height="400" xmlns="http://www.w3.org/2000/svg">
+  <rect width="100%" height="100%" fill="#f0f0f0"/>
+  <text x="300" y="200" text-anchor="middle" font-size="24" fill="#333">
+    这是${currentMode === 'canvas' ? '产品画布' : 'SWOT分析'}示例SVG
+  </text>
+  <circle cx="300" cy="250" r="50" fill="#667eea" opacity="0.5"/>
+</svg>
+\`\`\`
+包含了关键要素和模块。点击上方标签可在右侧查看详细图表。`,
+
+          `已经为您调整完成！
+\`\`\`svg
+<svg width="600" height="400" xmlns="http://www.w3.org/2000/svg">
+  <defs>
+    <linearGradient id="grad1" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" style="stop-color:#667eea;stop-opacity:1" />
+      <stop offset="100%" style="stop-color:#764ba2;stop-opacity:1" />
+    </linearGradient>
+  </defs>
+  <rect width="100%" height="100%" fill="url(#grad1)"/>
+  <text x="300" y="200" text-anchor="middle" font-size="28" fill="white" font-weight="bold">
+    ${currentMode === 'canvas' ? '优化后的产品画布' : '优化后的SWOT分析'}
+  </text>
+</svg>
+\`\`\`
+采用了更加鲜明的色彩组合，希望您满意！`
+        ];
+        
+        const response = mockResponses[Math.floor(Math.random() * mockResponses.length)];
+        addAIMessage(response);
+      }
+      
+      // ===== 页面加载时初始化 =====
+      loadConfig();
+    </script>
+
+</body>
+</html>
+```

@@ -1,0 +1,192 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>产品画布 / SWOT分析</title>
+    <script src="https://cdn.tailwindcss.com/3.4.1"></script>
+    <script src="https://code.iconify.design/iconify-icon/2.1.0/iconify-icon.min.js"></script>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;700;900&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="css/style.css">
+</head>
+<body class="bg-gray-100 h-screen flex flex-col">
+
+    <!-- 顶部标题栏 -->
+    <header class="bg-gradient-to-r from-orange-500 to-pink-500 p-3 flex items-center justify-between border-b-4 border-black">
+      <div class="flex items-center space-x-2">
+        <iconify-icon icon="ph:lightning-fill" class="text-3xl text-white"></iconify-icon>
+        <h1 id="page-title" class="text-2xl font-black text-white tracking-tight">产品画布</h1>
+      </div>
+      
+      <!-- 右侧按钮组 -->
+      <div class="flex items-center gap-3">
+        <!-- API配置按钮 -->
+        <button id="settings-btn" class="settings-btn bg-white/20 text-white p-2 border-2 border-white hover:bg-white/30 transition-all" title="API配置">
+          <iconify-icon icon="ph:gear-six-fill" class="text-2xl"></iconify-icon>
+        </button>
+        
+        <span class="text-white font-bold text-sm">点击切换模式</span>
+        <iconify-icon icon="ph:hand-pointing-fill" class="text-2xl text-yellow-300 wave-hand"></iconify-icon>
+        
+        <button id="canvas-mode-btn" class="mode-btn-active bg-white text-orange-600 px-4 py-2 font-bold border-2 border-black hover:bg-orange-50 transition-all duration-200">
+          <iconify-icon icon="ph:pen-nib-duotone" class="align-middle mr-1"></iconify-icon>
+          产品画布
+        </button>
+        <button id="swot-mode-btn" class="mode-btn-inactive bg-white text-purple-600 px-4 py-2 font-bold border-2 border-black hover:bg-purple-50 transition-all duration-200">
+          <iconify-icon icon="ph:chart-bar-duotone" class="align-middle mr-1"></iconify-icon>
+          SWOT分析
+        </button>
+      </div>
+    </header>
+
+    <!-- 主内容区 -->
+    <main class="flex-1 grid grid-cols-1 md:grid-cols-3 gap-4 p-4 overflow-hidden">
+    
+      <!-- 左侧对话面板 -->
+      <div class="md:col-span-1 bg-white wild-border border-cyan-500 flex flex-col">
+        <!-- 对话历史区 -->
+        <div id="chat-history" class="flex-1 p-4 overflow-y-auto space-y-3">
+          <!-- 欢迎消息 -->
+          <div class="flex justify-start">
+            <div class="chat-bubble-ai">
+              👋 欢迎使用产品画布/SWOT分析工具！请输入您的需求，我将为您生成专业的分析图表。
+            </div>
+          </div>
+        </div>
+        
+        <!-- 输入区 -->
+        <div class="p-3 border-t-3 border-gray-300 bg-yellow-50">
+          <div class="relative flex items-start gap-2">
+            <textarea
+              id="chat-input"
+              placeholder="输入您的想法，按Enter发送，Shift+Enter换行..."
+              class="flex-1 auto-resize-input border-2 border-gray-800 focus:border-cyan-500 focus:outline-none transition-colors font-medium"
+              rows="1"
+            ></textarea>
+            <div class="flex flex-col gap-2">
+              <button id="clear-button" class="clear-btn text-red-500 hover:text-red-600 transition-colors p-2 hover:scale-110 transform duration-200" title="清空当前对话">
+                <iconify-icon icon="ph:trash-bold" class="text-2xl"></iconify-icon>
+              </button>
+              <button id="send-button" class="text-cyan-600 hover:text-cyan-700 transition-colors p-2 hover:scale-110 transform duration-200">
+                <iconify-icon icon="ph:paper-plane-tilt-fill" class="text-3xl"></iconify-icon>
+              </button>
+            </div>
+          </div>
+        </div>
+      </div>
+    
+      <!-- 右侧显示面板 -->
+      <div class="md:col-span-2 bg-white wild-border border-purple-600 flex flex-col">
+        <div id="svg-viewer" class="flex-1 flex items-center justify-center p-4 bg-gradient-to-br from-purple-50 to-pink-50 overflow-auto">
+          <div id="svg-placeholder" class="text-center text-gray-400">
+            <iconify-icon icon="ph:image-square" class="text-6xl mx-auto text-purple-400"></iconify-icon>
+            <p class="mt-2 font-bold" id="placeholder-text">生成的产品画布将在此处显示</p>
+          </div>
+        </div>
+        
+        <!-- 底部操作栏 -->
+        <div class="p-3 border-t-3 border-gray-300 flex justify-end items-center gap-2 bg-gray-800">
+          <button id="download-svg-btn" class="p-2 bg-orange-500 text-white border-2 border-black hover:bg-orange-600 transition-all" title="下载SVG">
+            <iconify-icon icon="mdi:download-outline" class="text-xl"></iconify-icon>
+          </button>
+          <button id="export-image-btn" class="p-2 bg-green-500 text-white border-2 border-black hover:bg-green-600 transition-all" title="导出为图片">
+            <iconify-icon icon="mdi:image-outline" class="text-xl"></iconify-icon>
+          </button>
+          <button id="view-code-btn" class="p-2 bg-blue-500 text-white border-2 border-black hover:bg-blue-600 transition-all" title="查看代码">
+            <iconify-icon icon="mdi:code-tags" class="text-xl"></iconify-icon>
+          </button>
+        </div>
+      </div>
+    
+    </main>
+
+    <!-- API配置模态窗 -->
+    <div id="config-modal" class="modal-overlay">
+      <div class="modal-content">
+        <!-- 模态窗头部 -->
+        <div class="bg-gradient-to-r from-blue-600 to-purple-600 p-4 border-b-4 border-black flex items-center justify-between">
+          <div class="flex items-center gap-2">
+            <iconify-icon icon="ph:plugs-connected-fill" class="text-3xl text-white"></iconify-icon>
+            <h2 class="text-xl font-black text-white">API 配置</h2>
+          </div>
+          <button id="close-modal-btn" class="text-white hover:bg-white/20 p-2 transition-all">
+            <iconify-icon icon="ph:x-bold" class="text-2xl"></iconify-icon>
+          </button>
+        </div>
+        
+        <!-- 模态窗内容 -->
+        <div class="p-6 space-y-4">
+          <!-- API URL -->
+          <div>
+            <label class="block font-bold text-gray-800 mb-2 flex items-center gap-2">
+              <iconify-icon icon="ph:link-bold" class="text-lg text-blue-600"></iconify-icon>
+              API URL
+            </label>
+            <input 
+              id="api-url" 
+              type="text" 
+              placeholder="https://api.example.com/v1/chat" 
+              class="config-input"
+              value=""
+            />
+          </div>
+          
+          <!-- API Key -->
+          <div>
+            <label class="block font-bold text-gray-800 mb-2 flex items-center gap-2">
+              <iconify-icon icon="ph:key-bold" class="text-lg text-green-600"></iconify-icon>
+              API Key
+            </label>
+            <input 
+              id="api-key" 
+              type="password" 
+              placeholder="sk-xxxxxxxxxxxxxxxx" 
+              class="config-input"
+              value=""
+            />
+          </div>
+          
+          <!-- Model -->
+          <div>
+            <label class="block font-bold text-gray-800 mb-2 flex items-center gap-2">
+              <iconify-icon icon="ph:robot-bold" class="text-lg text-purple-600"></iconify-icon>
+              模型 (Model)
+            </label>
+            <input 
+              id="api-model" 
+              type="text" 
+              placeholder="gpt-4-turbo" 
+              class="config-input"
+              value=""
+            />
+          </div>
+          
+          <!-- 状态显示 -->
+          <div id="config-status" class="p-3 border-2 border-gray-300 bg-gray-50 text-sm text-gray-600 hidden">
+            <iconify-icon icon="ph:info" class="align-middle"></iconify-icon>
+            <span id="status-text">等待操作...</span>
+          </div>
+        </div>
+        
+        <!-- 模态窗底部按钮 -->
+        <div class="p-4 border-t-3 border-gray-300 bg-gray-100 flex gap-3 justify-end">
+          <button id="test-api-btn" class="px-4 py-2 bg-yellow-500 text-white font-bold border-2 border-black hover:bg-yellow-600 transition-all flex items-center gap-2">
+            <iconify-icon icon="ph:flask-bold"></iconify-icon>
+            测试连接
+          </button>
+          <button id="save-config-btn" class="px-4 py-2 bg-green-500 text-white font-bold border-2 border-black hover:bg-green-600 transition-all flex items-center gap-2">
+            <iconify-icon icon="ph:floppy-disk-bold"></iconify-icon>
+            保存配置
+          </button>
+        </div>
+      </div>
+    </div>
+
+    <!-- 引入JavaScript文件 -->
+    <script src="js/utils.js"></script>
+    <script src="js/apiclient.js"></script>
+    <script src="js/app.js"></script>
+</body>
+</html>
