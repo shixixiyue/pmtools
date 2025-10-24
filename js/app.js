@@ -21,6 +21,11 @@ class ProductCanvasApp {
     this.conversationHistory = {};
     this.isProcessing = false;
     this.activeStreamHandle = null;
+    this.svgZoom = { canvas: 1, swot: 1 };
+    this.activeSvgPlaceholder = null;
+    this.pendingSvgId = null;
+    this.pendingCancel = false;
+    this.copyClipboardSupported = typeof ClipboardItem !== 'undefined' && !!navigator.clipboard;
     
     this.initElements();
     this.initEventListeners();
@@ -51,7 +56,11 @@ class ProductCanvasApp {
     this.placeholderText = this.svgViewer.querySelector('#placeholder-text');
     
     // 底部操作按钮
+    this.zoomOutBtn = document.getElementById('zoom-out-btn');
+    this.zoomInBtn = document.getElementById('zoom-in-btn');
+    this.zoomResetBtn = document.getElementById('zoom-reset-btn');
     this.downloadSvgBtn = document.getElementById('download-svg-btn');
+    this.copyImageBtn = document.getElementById('copy-image-btn');
     this.exportImageBtn = document.getElementById('export-image-btn');
     this.viewCodeBtn = document.getElementById('view-code-btn');
     
@@ -100,7 +109,18 @@ class ProductCanvasApp {
     });
     
     // 底部操作按钮
+    if (this.zoomOutBtn) this.zoomOutBtn.addEventListener('click', () => this.adjustSvgZoom(-0.25));
+    if (this.zoomInBtn) this.zoomInBtn.addEventListener('click', () => this.adjustSvgZoom(0.25));
+    if (this.zoomResetBtn) this.zoomResetBtn.addEventListener('click', () => this.resetSvgZoom());
     this.downloadSvgBtn.addEventListener('click', () => this.downloadSVG());
+    if (this.copyImageBtn) {
+      if (this.copyClipboardSupported) {
+        this.copyImageBtn.addEventListener('click', () => this.copySvgToClipboard());
+      } else {
+        this.copyImageBtn.disabled = true;
+        this.copyImageBtn.title = '当前浏览器不支持复制图片到剪贴板';
+      }
+    }
     this.exportImageBtn.addEventListener('click', () => this.exportAsImage());
     this.viewCodeBtn.addEventListener('click', () => this.viewSVGCode());
     
@@ -141,6 +161,7 @@ class ProductCanvasApp {
     };
 
     this.renderSvgViewerForMode();
+    this.setSendButtonState('idle');
     
     // 加载API配置
     const apiConfig = window.apiClient.getConfig();
@@ -236,6 +257,8 @@ class ProductCanvasApp {
       </div>
     `;
     this.placeholderText = this.svgViewer.querySelector('#placeholder-text');
+    this.setActivePlaceholder(null);
+    this.updateZoomButtons();
   }
 
   renderSvgViewerForMode() {
@@ -257,52 +280,175 @@ class ProductCanvasApp {
 
     if (latestSvgId && svgStore[latestSvgId]) {
       this.currentSvgId = latestSvgId;
-      this.svgViewer.innerHTML = svgStore[latestSvgId].content;
-      this.placeholderText = null;
+      this.mountSvgMarkup(svgStore[latestSvgId].content);
+      this.setActivePlaceholder(latestSvgId);
     } else {
+      this.currentSvgId = null;
       this.showSvgPlaceholder();
     }
+
+    this.updateZoomButtons();
+  }
+
+  adjustSvgZoom(delta) {
+    const current = this.svgZoom[this.currentMode] || 1;
+    const next = Math.min(3, Math.max(0.25, parseFloat((current + delta).toFixed(2))));
+    this.svgZoom[this.currentMode] = next;
+    this.applySvgZoom();
+  }
+
+  resetSvgZoom() {
+    this.svgZoom[this.currentMode] = 1;
+    this.applySvgZoom();
+  }
+
+  applySvgZoom() {
+    const zoom = this.svgZoom[this.currentMode] || 1;
+    const wrapper = this.svgViewer.querySelector('.svg-content-wrapper');
+    if (wrapper) {
+      wrapper.style.transform = `scale(${zoom})`;
+      wrapper.style.transformOrigin = 'center top';
+    }
+    this.updateZoomButtons();
+  }
+
+  updateZoomButtons() {
+    if (!this.zoomInBtn || !this.zoomOutBtn || !this.zoomResetBtn) return;
+    const hasActiveSvg = !!this.currentSvgId && !!(this.svgStorage[this.currentMode] || {})[this.currentSvgId];
+    const zoom = this.svgZoom[this.currentMode] || 1;
+
+    const disableControls = !hasActiveSvg;
+    this.zoomInBtn.disabled = disableControls || zoom >= 3;
+    this.zoomOutBtn.disabled = disableControls || zoom <= 0.25;
+    this.zoomResetBtn.disabled = disableControls || Math.abs(zoom - 1) < 0.01;
+
+    if (!hasActiveSvg) {
+      if (this.copyImageBtn) this.copyImageBtn.disabled = true;
+      this.downloadSvgBtn.disabled = true;
+      this.exportImageBtn.disabled = true;
+      this.viewCodeBtn.disabled = true;
+    } else {
+      if (this.copyImageBtn) this.copyImageBtn.disabled = !this.copyClipboardSupported;
+      this.downloadSvgBtn.disabled = false;
+      this.exportImageBtn.disabled = false;
+      this.viewCodeBtn.disabled = false;
+    }
+  }
+
+  setActivePlaceholder(svgId) {
+    const previousActive = this.chatHistory.querySelectorAll('.svg-placeholder-active');
+    previousActive.forEach(el => el.classList.remove('svg-placeholder-active'));
+    if (svgId) {
+      const next = this.chatHistory.querySelector(`.svg-placeholder-block[data-svg-id="${svgId}"], .svg-drawing-placeholder[data-svg-id="${svgId}"]`);
+      if (next) {
+        next.classList.add('svg-placeholder-active');
+        this.activeSvgPlaceholder = svgId;
+      } else {
+        this.activeSvgPlaceholder = null;
+      }
+    } else {
+      this.activeSvgPlaceholder = null;
+    }
+  }
+
+  mountSvgMarkup(svgMarkup, temporary = false) {
+    this.svgViewer.innerHTML = '';
+    const wrapper = document.createElement('div');
+    wrapper.className = 'svg-content-wrapper';
+    wrapper.innerHTML = svgMarkup;
+    this.svgViewer.appendChild(wrapper);
+    this.placeholderText = null;
+    if (!temporary) {
+      this.applySvgZoom();
+    } else {
+      const zoom = this.svgZoom[this.currentMode] || 1;
+      wrapper.style.transform = `scale(${zoom})`;
+      wrapper.style.transformOrigin = 'center top';
+    }
+  }
+
+  renderSvgContent(svgId) {
+    const store = this.svgStorage[this.currentMode] || {};
+    if (!svgId || !store[svgId]) {
+      this.showSvgPlaceholder();
+      return;
+    }
+    this.currentSvgId = svgId;
+    this.mountSvgMarkup(store[svgId].content);
+    this.setActivePlaceholder(svgId);
+    this.applySvgZoom();
+  }
+
+  renderTemporarySvg(svgMarkup) {
+    this.mountSvgMarkup(svgMarkup, true);
+  }
+
+  buildContextForUserMessage(userIndex) {
+    const history = this.conversationHistory[this.currentMode] || [];
+    if (userIndex < 0 || userIndex >= history.length) {
+      return null;
+    }
+
+    const target = history[userIndex];
+    if (!target || target.type !== 'user') {
+      return null;
+    }
+
+    const start = Math.max(0, userIndex - 10);
+    const contextSlice = history.slice(start, userIndex);
+    const contextMessages = contextSlice
+      .filter(msg => msg.type === 'user' || msg.type === 'ai')
+      .map(msg => ({
+        role: msg.type === 'user' ? 'user' : 'assistant',
+        content: msg.content
+      }));
+
+    return {
+      userMessage: target.content,
+      contextMessages
+    };
   }
 
   // 发送消息
   async sendMessage() {
     const message = this.chatInput.value.trim();
     if (!message || this.isProcessing) return;
-    
-    // 检查API配置
+
     if (!window.apiClient.isConfigValid()) {
       alert('⚠️ 请先配置API设置！点击右上角齿轮图标进行配置。');
       this.openConfigModal();
       return;
     }
-    
+
+    this.pendingCancel = false;
     this.isProcessing = true;
-    this.setSendButtonState('busy');
-    this.sendButton.disabled = true;
-    
-    // 添加用户消息
+
     this.addUserMessage(message);
     this.chatInput.value = '';
     Utils.autoResizeTextarea(this.chatInput);
-    
+
+    const history = this.conversationHistory[this.currentMode] || [];
+    const targetIndex = history.length - 1;
+    const payload = this.buildContextForUserMessage(targetIndex);
+    if (!payload) {
+      console.warn('无法构建上下文，终止发送');
+      this.isProcessing = false;
+      this.setSendButtonState('idle');
+      return;
+    }
+
+    this.setSendButtonState('streaming');
+    this.sendButton.disabled = false;
+
     try {
-      // 获取对话上下文
-      const contextMessages = this.conversationHistory[this.currentMode]
-        .slice(-10) // 只取最近10条消息作为上下文
-        .map(msg => ({
-          role: msg.type === 'user' ? 'user' : 'assistant',
-          content: msg.content
-        }));
-      
-      // 开始流式接收消息
-      await this.startStreamingMessage(message, contextMessages);
-      
+      await this.startStreamingMessage(payload.userMessage, payload.contextMessages);
     } catch (error) {
       console.error('发送消息失败:', error);
       this.addErrorMessage(error.message);
       this.isProcessing = false;
       this.setSendButtonState('idle');
       this.activeStreamHandle = null;
+      this.sendButton.disabled = false;
     }
   }
 
@@ -339,7 +485,9 @@ class ProductCanvasApp {
 
       this.isProcessing = false;
       this.setSendButtonState('idle');
+      this.sendButton.disabled = false;
       this.activeStreamHandle = null;
+      this.pendingCancel = false;
     };
 
     const onChunk = (chunk) => {
@@ -363,11 +511,13 @@ class ProductCanvasApp {
         if (svgStartMatch) {
           svgStarted = true;
           svgId = svgId || Utils.generateId('svg');
+          this.pendingSvgId = svgId;
 
           const svgStartIndex = svgStartMatch.index;
           beforeText = fullContent.substring(0, svgStartIndex);
 
           this.updateStreamingMessageWithPlaceholder(messageContainer, beforeText, svgId);
+          this.setActivePlaceholder(svgId);
 
           this.svgViewer.innerHTML = `
             <div class="flex items-center justify-center h-full">
@@ -377,6 +527,7 @@ class ProductCanvasApp {
               </div>
             </div>
           `;
+          this.updateZoomButtons();
         }
       }
 
@@ -393,8 +544,6 @@ class ProductCanvasApp {
               svgContent += '</svg>';
             }
 
-            this.svgViewer.innerHTML = svgContent;
-
             this.svgStorage[this.currentMode][svgId] = {
               content: svgContent,
               messageId,
@@ -402,6 +551,8 @@ class ProductCanvasApp {
               timestamp: new Date().toISOString()
             };
 
+            this.pendingSvgId = null;
+            this.renderSvgContent(svgId);
             this.updatePlaceholderToClickable(messageContainer, svgId);
 
             svgStarted = false;
@@ -420,7 +571,7 @@ class ProductCanvasApp {
               tempSvgContent += '</svg>';
             }
 
-            this.svgViewer.innerHTML = tempSvgContent;
+            this.renderTemporarySvg(tempSvgContent);
           }
         }
       } else {
@@ -441,6 +592,12 @@ class ProductCanvasApp {
 
       this.activeStreamHandle = streamHandle;
 
+      if (this.pendingCancel) {
+        const shouldCancel = this.pendingCancel;
+        this.pendingCancel = false;
+        this.cancelActiveStream();
+      }
+
       await streamHandle.finished;
 
       if (!streamClosed) {
@@ -451,6 +608,8 @@ class ProductCanvasApp {
       this.activeStreamHandle = null;
       this.isProcessing = false;
       this.setSendButtonState('idle');
+      this.sendButton.disabled = false;
+      this.pendingCancel = false;
 
       const bubble = this.chatHistory.querySelector(`[data-message-id="${messageId}"]`);
       if (bubble) {
@@ -469,9 +628,12 @@ class ProductCanvasApp {
 
   cancelActiveStream() {
     if (!this.activeStreamHandle || typeof this.activeStreamHandle.cancel !== 'function') {
+      this.pendingCancel = true;
+      this.setSendButtonState('terminating');
       return;
     }
 
+    this.pendingCancel = false;
     this.setSendButtonState('terminating');
     try {
       this.activeStreamHandle.cancel();
@@ -532,22 +694,26 @@ class ProductCanvasApp {
     if (placeholder) {
       placeholder.classList.remove('svg-drawing-placeholder');
       placeholder.classList.add('svg-placeholder-block');
+      placeholder.setAttribute('data-svg-id', svgId);
       placeholder.innerHTML = `📊 点击查看${this.currentMode === 'canvas' ? '产品画布' : 'SWOT分析'} SVG`;
       placeholder.setAttribute('onclick', `app.viewSVG('${svgId}')`);
+      if (this.currentSvgId === svgId) {
+        placeholder.classList.add('svg-placeholder-active');
+      }
     }
   }
   
   // 更新SVG后的消息内容
   updateStreamingMessageAfterSVG(container, beforeText, svgId, afterText) {
-    // 使用Markdown解析文本
     const parsedBeforeText = typeof marked !== 'undefined' ? marked.parse(beforeText) : Utils.escapeHtml(beforeText);
     const parsedAfterText = typeof marked !== 'undefined' ? marked.parse(afterText) : Utils.escapeHtml(afterText);
-    
+    const placeholderClass = this.currentSvgId === svgId ? 'svg-placeholder-block svg-placeholder-active' : 'svg-placeholder-block';
+
     container.innerHTML = `
       <div class="chat-bubble-ai relative streaming-text" data-message-id="${container.dataset.messageId}">
         <div>
           ${parsedBeforeText}
-          <div class="svg-placeholder-block" data-svg-id="${svgId}" onclick="app.viewSVG('${svgId}')">
+          <div class="${placeholderClass}" data-svg-id="${svgId}" onclick="app.viewSVG('${svgId}')">
             📊 点击查看${this.currentMode === 'canvas' ? '产品画布' : 'SWOT分析'} SVG
           </div>
           <div class="typing-cursor">${parsedAfterText}</div>
@@ -615,6 +781,7 @@ class ProductCanvasApp {
 
   // 完成流式消息
   finalizeStreamingMessage(messageId, fullContent, svgId = null) {
+    this.pendingSvgId = null;
     const parsed = Utils.parseSVGResponse(fullContent);
     const timestamp = new Date().toISOString();
 
@@ -676,6 +843,7 @@ class ProductCanvasApp {
     
     // 清空当前模式的SVG存储
     this.svgStorage[this.currentMode] = {};
+    this.svgZoom[this.currentMode] = 1;
     this.showSvgPlaceholder();
 
     // 保存数据
@@ -804,11 +972,12 @@ class ProductCanvasApp {
     const actions = this.buildActionToolbar(message.id, { allowRegenerate, allowRollback });
 
     messageDiv.className = 'flex justify-start';
+    const placeholderClass = this.currentSvgId === svgId ? 'svg-placeholder-block svg-placeholder-active' : 'svg-placeholder-block';
     messageDiv.innerHTML = `
       <div class="chat-bubble-ai relative" data-message-id="${message.id}">
         <div>
           ${beforeHtml}
-          <div class="svg-placeholder-block" data-svg-id="${svgId}" onclick="app.viewSVG('${svgId}')">
+          <div class="${placeholderClass}" data-svg-id="${svgId}" onclick="app.viewSVG('${svgId}')">
             📊 点击查看 ${this.currentMode === 'canvas' ? '产品画布' : 'SWOT分析'} SVG
           </div>
           ${afterHtml}
@@ -889,19 +1058,19 @@ class ProductCanvasApp {
       Utils.storage.set('swotHistory', this.conversationHistory.swot || []);
     }
 
+    this.setActivePlaceholder(this.currentSvgId);
     Utils.scrollToBottom(this.chatHistory);
   }
 
   // 显示SVG
   viewSVG(svgId) {
-    if (!this.svgStorage[this.currentMode][svgId]) {
+    const store = this.svgStorage[this.currentMode] || {};
+    if (!store[svgId]) {
       console.error('SVG not found:', svgId);
       return;
     }
-    
-    this.currentSvgId = svgId;
-    const svgContent = this.svgStorage[this.currentMode][svgId].content;
-    this.svgViewer.innerHTML = svgContent;
+
+    this.renderSvgContent(svgId);
   }
 
   // 退回到指定消息
@@ -943,64 +1112,194 @@ class ProductCanvasApp {
   // 重新生成消息
   async regenerateMessage(messageId) {
     if (this.isProcessing) return;
-    
+
+    const history = this.conversationHistory[this.currentMode] || [];
+    const targetIndex = history.findIndex(msg => msg.id === messageId && msg.type === 'ai');
+    if (targetIndex === -1) {
+      console.warn('未找到可重新生成的消息');
+      return;
+    }
+
+    let userIndex = -1;
+    for (let i = targetIndex - 1; i >= 0; i--) {
+      if (history[i].type === 'user') {
+        userIndex = i;
+        break;
+      }
+    }
+
+    if (userIndex === -1) {
+      alert('未找到对应的用户消息，无法重新生成');
+      return;
+    }
+
+    const payload = this.buildContextForUserMessage(userIndex);
+    if (!payload) {
+      alert('无法构建对话上下文，请稍后重试');
+      return;
+    }
+
+    this.pendingCancel = false;
     this.isProcessing = true;
-    this.setSendButtonState('busy');
-    this.sendButton.disabled = true;
-    
+    this.setSendButtonState('streaming');
+    this.sendButton.disabled = false;
+
     try {
-      // 重新生成响应
-      const response = await window.apiClient.regenerateResponse(messageId, this.conversationHistory[this.currentMode]);
-      
-      // 退回到指定消息
-      this.rollbackToMessage(messageId);
-      
-      // 添加新的AI回复
-      this.addAIMessage(response);
-      
+      await this.startStreamingMessage(payload.userMessage, payload.contextMessages);
     } catch (error) {
       console.error('重新生成失败:', error);
       this.addErrorMessage(error.message);
-    } finally {
       this.isProcessing = false;
       this.setSendButtonState('idle');
       this.activeStreamHandle = null;
+      this.sendButton.disabled = false;
+    }
+  }
+
+  getActiveSvgRecord(showWarning = true) {
+    const store = this.svgStorage[this.currentMode] || {};
+    if (this.currentSvgId && store[this.currentSvgId]) {
+      return { id: this.currentSvgId, ...store[this.currentSvgId] };
+    }
+
+    if (showWarning) {
+      alert('请先生成并选择一个图表');
+    }
+    return null;
+  }
+
+  parseSvgDimensions(svgContent) {
+    try {
+      const parser = new DOMParser();
+      const doc = parser.parseFromString(svgContent, 'image/svg+xml');
+      const svgEl = doc.querySelector('svg');
+      if (!svgEl) {
+        return { width: 1024, height: 768 };
+      }
+
+      const parseLength = (value) => {
+        if (!value) return null;
+        const match = /([0-9.]+)/.exec(value);
+        return match ? parseFloat(match[1]) : null;
+      };
+
+      let width = parseLength(svgEl.getAttribute('width'));
+      let height = parseLength(svgEl.getAttribute('height'));
+      const viewBox = svgEl.getAttribute('viewBox');
+
+      if ((!width || !height) && viewBox) {
+        const parts = viewBox.split(/\s+/).map(Number).filter(n => !Number.isNaN(n));
+        if (parts.length === 4) {
+          width = width || parts[2];
+          height = height || parts[3];
+        }
+      }
+
+      return {
+        width: width || 1024,
+        height: height || 768
+      };
+    } catch (error) {
+      console.warn('解析SVG尺寸失败:', error);
+      return { width: 1024, height: 768 };
+    }
+  }
+
+  loadImageFromUrl(url) {
+    return new Promise((resolve, reject) => {
+      const img = new Image();
+      img.onload = () => resolve(img);
+      img.onerror = (err) => reject(err);
+      img.src = url;
+    });
+  }
+
+  async convertSvgToPngBlob(svgContent) {
+    const { width, height } = this.parseSvgDimensions(svgContent);
+    const svgBlob = new Blob([svgContent], { type: 'image/svg+xml' });
+    const url = URL.createObjectURL(svgBlob);
+
+    try {
+      const img = await this.loadImageFromUrl(url);
+      const canvas = document.createElement('canvas');
+      const canvasWidth = Math.max(1, img.naturalWidth || width || 1024);
+      const canvasHeight = Math.max(1, img.naturalHeight || height || 768);
+      canvas.width = canvasWidth;
+      canvas.height = canvasHeight;
+
+      const ctx = canvas.getContext('2d');
+      ctx.clearRect(0, 0, canvasWidth, canvasHeight);
+      ctx.drawImage(img, 0, 0, canvasWidth, canvasHeight);
+
+      return await new Promise((resolve, reject) => {
+        canvas.toBlob((blob) => {
+          if (blob) {
+            resolve(blob);
+          } else {
+            reject(new Error('无法生成PNG图像'));
+          }
+        }, 'image/png');
+      });
+    } finally {
+      URL.revokeObjectURL(url);
+    }
+  }
+
+  async copySvgToClipboard() {
+    const record = this.getActiveSvgRecord();
+    if (!record) return;
+
+    if (!navigator.clipboard || typeof ClipboardItem === 'undefined') {
+      alert('当前浏览器不支持复制图片到剪贴板，请使用下载功能。');
+      return;
+    }
+
+    try {
+      const blob = await this.convertSvgToPngBlob(record.content);
+      await navigator.clipboard.write([new ClipboardItem({ 'image/png': blob })]);
+      alert('图像已复制到剪贴板');
+    } catch (error) {
+      console.error('复制图片失败:', error);
+      alert('复制失败，请稍后重试。');
     }
   }
 
   // 下载SVG
   downloadSVG() {
-    if (!this.currentSvgId) {
-      alert('请先生成SVG图表');
-      return;
-    }
-    
-    const svgContent = this.svgStorage[this.currentMode][this.currentSvgId].content;
+    const record = this.getActiveSvgRecord();
+    if (!record) return;
+
     const filename = `${this.currentMode}-${Utils.formatDateTime().replace(/[/:]/g, '-')}.svg`;
-    Utils.downloadFile(svgContent, filename, 'image/svg+xml');
+    Utils.downloadFile(record.content, filename, 'image/svg+xml');
   }
 
   // 导出为图片
-  exportAsImage() {
-    if (!this.currentSvgId) {
-      alert('请先生成SVG图表');
-      return;
+  async exportAsImage() {
+    const record = this.getActiveSvgRecord();
+    if (!record) return;
+
+    try {
+      const blob = await this.convertSvgToPngBlob(record.content);
+      const filename = `${this.currentMode}-${Utils.formatDateTime().replace(/[/:]/g, '-')}.png`;
+      const url = URL.createObjectURL(blob);
+      const link = document.createElement('a');
+      link.href = url;
+      link.download = filename;
+      link.click();
+      URL.revokeObjectURL(url);
+    } catch (error) {
+      console.error('导出图片失败:', error);
+      alert('导出图片失败，请稍后重试。');
     }
-    
-    // 这里可以实现SVG转PNG的功能
-    // 由于需要额外的库，这里先提示用户
-    alert('SVG转PNG功能需要额外的库支持，您可以使用下载SVG功能，然后使用在线工具转换。');
   }
 
   // 查看SVG代码
   viewSVGCode() {
-    if (!this.currentSvgId) {
-      alert('请先生成SVG图表');
-      return;
-    }
-    
-    const svgContent = this.svgStorage[this.currentMode][this.currentSvgId].content;
-    
+    const record = this.getActiveSvgRecord();
+    if (!record) return;
+
+    const svgContent = record.content;
+
     // 创建代码查看模态窗
     const modal = document.createElement('div');
     modal.className = 'modal-overlay active';

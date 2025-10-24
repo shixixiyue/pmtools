@@ -223,6 +223,16 @@ body {
   transition: color 0.2s ease;
 }
 
+.svg-placeholder-active {
+  border-color: #2563eb;
+  box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.2);
+}
+
+.svg-content-wrapper {
+  display: inline-block;
+  transform-origin: center top;
+}
+
 /* 小手摇摆动画 */
 @keyframes wave {
   0%, 100% {transform: translateX(0px) rotate(90deg);}
@@ -344,4 +354,8 @@ body {
 
 .clear-history-btn:hover iconify-icon {
   animation: shake 0.5s ease-in-out;
+}
+
+#send-button.terminate-mode {
+  border-color: #dc2626;
 }
