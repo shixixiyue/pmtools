@@ -322,7 +322,7 @@ class ProductCanvasApp {
     
     const onComplete = () => {
       // 流式接收完成，处理完整消息
-      this.finalizeStreamingMessage(messageId, fullContent, svgId, beforeText);
+      this.finalizeStreamingMessage(messageId, fullContent, svgId);
       
       this.isProcessing = false;
       this.sendButton.disabled = false;
@@ -414,8 +414,32 @@ class ProductCanvasApp {
     Utils.scrollToBottom(this.chatHistory);
   }
 
+  // 组装标准化的SVG消息字符串
+  buildSVGMessageContent(beforeText = '', svgBody = '', afterText = '') {
+    const segments = [];
+    const trimmedBefore = (beforeText || '').trim();
+    const trimmedAfter = (afterText || '').trim();
+    const trimmedSvg = (svgBody || '').trim();
+
+    if (trimmedBefore) {
+      segments.push(trimmedBefore);
+    }
+
+    if (trimmedSvg) {
+      segments.push('```svg');
+      segments.push(trimmedSvg);
+      segments.push('```');
+    }
+
+    if (trimmedAfter) {
+      segments.push(trimmedAfter);
+    }
+
+    return segments.join('\n\n').trim();
+  }
+
   // 完成流式消息
-  finalizeStreamingMessage(messageId, fullContent, svgId = null, beforeText = '') {
+  finalizeStreamingMessage(messageId, fullContent, svgId = null) {
     let container = document.querySelector(`.chat-bubble-ai[data-message-id="${messageId}"]`);
     if (!container) {
       const fallback = document.querySelector(`[data-message-id="${messageId}"]`);
@@ -427,119 +451,95 @@ class ProductCanvasApp {
     }
     if (!container) return;
     
+    const parsed = Utils.parseSVGResponse(fullContent);
+    const timestamp = new Date().toISOString();
+
     const message = {
       id: messageId,
       type: 'ai',
-      content: fullContent,
-      timestamp: new Date().toISOString()
+      content: '',
+      timestamp
     };
-    
-    this.conversationHistory[this.currentMode].push(message);
-    
-    // 如果已经有SVG ID（从流式处理中获得），直接使用
-    if (svgId && this.svgStorage[this.currentMode][svgId]) {
-      // 提取SVG后的文本
-      let afterText = '';
-      if (fullContent.includes('</svg>')) {
-        const svgEndIndex = fullContent.indexOf('</svg>') + 6;
-        afterText = fullContent.substring(svgEndIndex);
+
+    container.classList.remove('streaming-text');
+    container.setAttribute('data-message-id', messageId);
+
+    const actionFooter = `
+      <div class="flex gap-2 mt-2 pt-2 border-t border-gray-200">
+        <button class="bubble-action-btn flex items-center gap-1 text-xs text-gray-600 hover:text-blue-600 transition-colors" onclick="app.rollbackToMessage('${messageId}')">
+          <iconify-icon icon="ph:arrow-u-up-left-bold"></iconify-icon>
+          <span>退回</span>
+        </button>
+        <button class="bubble-action-btn flex items-center gap-1 text-xs text-gray-600 hover:text-green-600 transition-colors" onclick="app.regenerateMessage('${messageId}')">
+          <iconify-icon icon="ph:arrow-clockwise-bold"></iconify-icon>
+          <span>重新生成</span>
+        </button>
+      </div>
+    `;
+
+    if (parsed.svgContent && parsed.svgContent.includes('<svg')) {
+      const svgBody = parsed.svgContent.trim().endsWith('</svg>')
+        ? parsed.svgContent.trim()
+        : `${parsed.svgContent.trim()}\n</svg>`;
+
+      let targetSvgId = svgId || null;
+      if (!targetSvgId || !this.svgStorage[this.currentMode][targetSvgId]) {
+        targetSvgId = targetSvgId || Utils.generateId('svg');
       }
-      
-      // 使用Markdown解析文本
-      const parsedBeforeText = typeof marked !== 'undefined' ? marked.parse(beforeText) : Utils.escapeHtml(beforeText);
-      const parsedAfterText = typeof marked !== 'undefined' ? marked.parse(afterText) : Utils.escapeHtml(afterText);
-      
-      // 更新容器内容为包含SVG的消息
+
+      this.svgStorage[this.currentMode][targetSvgId] = {
+        content: svgBody,
+        messageId,
+        mode: this.currentMode,
+        timestamp
+      };
+
+      const beforeHtml = parsed.beforeText
+        ? (typeof marked !== 'undefined' ? marked.parse(parsed.beforeText) : Utils.escapeHtml(parsed.beforeText))
+        : '';
+      const afterHtml = parsed.afterText
+        ? (typeof marked !== 'undefined' ? marked.parse(parsed.afterText) : Utils.escapeHtml(parsed.afterText))
+        : '';
+
       container.innerHTML = `
         <div>
-          ${parsedBeforeText}
-          <div class="svg-placeholder-block" data-svg-id="${svgId}" onclick="app.viewSVG('${svgId}')">
+          ${beforeHtml}
+          <div class="svg-placeholder-block" data-svg-id="${targetSvgId}" onclick="app.viewSVG('${targetSvgId}')">
             📊 点击查看 ${this.currentMode === 'canvas' ? '产品画布' : 'SWOT分析'} SVG
           </div>
-          ${parsedAfterText}
+          ${afterHtml}
         </div>
-        
-        <div class="flex gap-2 mt-2 pt-2 border-t border-gray-200">
-          <button class="bubble-action-btn flex items-center gap-1 text-xs text-gray-600 hover:text-blue-600 transition-colors" onclick="app.rollbackToMessage('${messageId}')">
-            <iconify-icon icon="ph:arrow-u-up-left-bold"></iconify-icon>
-            <span>退回</span>
-          </button>
-          <button class="bubble-action-btn flex items-center gap-1 text-xs text-gray-600 hover:text-green-600 transition-colors" onclick="app.regenerateMessage('${messageId}')">
-            <iconify-icon icon="ph:arrow-clockwise-bold"></iconify-icon>
-            <span>重新生成</span>
-          </button>
-        </div>
+        ${actionFooter}
       `;
+
+      this.currentSvgId = targetSvgId;
+      this.svgViewer.innerHTML = svgBody;
+
+      message.content = this.buildSVGMessageContent(parsed.beforeText, svgBody, parsed.afterText);
     } else {
-      // 使用原有的解析方法作为后备
-      const parsed = Utils.parseSVGResponse(fullContent);
-      
-      // 如果包含SVG，存储SVG内容
-      if (parsed.svgContent) {
-        const newSvgId = Utils.generateId('svg');
-        this.svgStorage[this.currentMode][newSvgId] = {
-          content: parsed.svgContent,
-          messageId: messageId,
-          mode: this.currentMode,
-          timestamp: new Date().toISOString()
-        };
-        
-        this.viewSVG(newSvgId);
-        
-        // 使用Markdown解析文本
-        const parsedBeforeText = typeof marked !== 'undefined' ? marked.parse(parsed.beforeText) : Utils.escapeHtml(parsed.beforeText);
-        const parsedAfterText = typeof marked !== 'undefined' ? marked.parse(parsed.afterText) : Utils.escapeHtml(parsed.afterText);
-        
-        // 更新容器内容为包含SVG的消息
-        container.innerHTML = `
-          <div>
-            ${parsedBeforeText}
-            <div class="svg-placeholder-block" data-svg-id="${newSvgId}" onclick="app.viewSVG('${newSvgId}')">
-              📊 点击查看 ${this.currentMode === 'canvas' ? '产品画布' : 'SWOT分析'} SVG
-            </div>
-            ${parsedAfterText}
-          </div>
-          
-          <div class="flex gap-2 mt-2 pt-2 border-t border-gray-200">
-            <button class="bubble-action-btn flex items-center gap-1 text-xs text-gray-600 hover:text-blue-600 transition-colors" onclick="app.rollbackToMessage('${messageId}')">
-              <iconify-icon icon="ph:arrow-u-up-left-bold"></iconify-icon>
-              <span>退回</span>
-            </button>
-            <button class="bubble-action-btn flex items-center gap-1 text-xs text-gray-600 hover:text-green-600 transition-colors" onclick="app.regenerateMessage('${messageId}')">
-              <iconify-icon icon="ph:arrow-clockwise-bold"></iconify-icon>
-              <span>重新生成</span>
-            </button>
-          </div>
-        `;
-      } else {
-        // 使用Markdown解析内容
-        const parsedContent = typeof marked !== 'undefined' ? marked.parse(fullContent) : Utils.escapeHtml(fullContent);
-        
-        // 更新容器内容为普通消息
-        container.innerHTML = `
-          <div class="mb-1">
-            ${parsedContent}
-          </div>
-          
-          <div class="flex gap-2 mt-2 pt-2 border-t border-gray-200">
-            <button class="bubble-action-btn flex items-center gap-1 text-xs text-gray-600 hover:text-blue-600 transition-colors" onclick="app.rollbackToMessage('${messageId}')">
-              <iconify-icon icon="ph:arrow-u-up-left-bold"></iconify-icon>
-              <span>退回</span>
-            </button>
-            <button class="bubble-action-btn flex items-center gap-1 text-xs text-gray-600 hover:text-green-600 transition-colors" onclick="app.regenerateMessage('${messageId}')">
-              <iconify-icon icon="ph:arrow-clockwise-bold"></iconify-icon>
-              <span>重新生成</span>
-            </button>
-          </div>
-        `;
-      }
+      const sanitizedText = fullContent.replace(/^\s*```/, '').replace(/```$/, '').trim();
+      const parsedContent = sanitizedText
+        ? (typeof marked !== 'undefined' ? marked.parse(sanitizedText) : Utils.escapeHtml(sanitizedText))
+        : '';
+
+      container.innerHTML = `
+        <div class="mb-1">
+          ${parsedContent}
+        </div>
+        ${actionFooter}
+      `;
+
+      message.content = sanitizedText;
     }
-    
+
+    this.conversationHistory[this.currentMode].push(message);
+
     // 保存数据
     Utils.storage.set('canvasHistory', this.conversationHistory.canvas);
     Utils.storage.set('swotHistory', this.conversationHistory.swot);
     Utils.storage.set('canvasSVGs', this.svgStorage.canvas);
     Utils.storage.set('swotSVGs', this.svgStorage.swot);
+    Utils.scrollToBottom(this.chatHistory);
   }
 
   // 清空当前对话

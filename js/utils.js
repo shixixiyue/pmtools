@@ -21,26 +21,60 @@ function generateId(prefix = 'id') {
   return `${prefix}-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
 }
 
-// 解析SVG响应，提取SVG内容和前后文本
-function parseSVGResponse(response) {
-  const svgRegex = /```svg\s*([\s\S]*?)```/i;
-  const match = response.match(svgRegex);
-  
-  if (match) {
-    const svgContent = match[1].trim();
-    const beforeText = response.substring(0, match.index).trim();
-    const afterText = response.substring(match.index + match[0].length).trim();
-    
+// 解析SVG响应，提取SVG内容和前后文本，容错缺失的结束反引号
+function parseSVGResponse(response = '') {
+  const content = typeof response === 'string' ? response : String(response || '');
+  const svgFenceRegex = /```(?:svg)?\s*([\s\S]*?)```/i;
+  const fenceMatch = content.match(svgFenceRegex);
+
+  if (fenceMatch) {
+    const svgBody = fenceMatch[1].trim();
+    const beforeText = content.substring(0, fenceMatch.index).trim();
+    let afterText = content.substring(fenceMatch.index + fenceMatch[0].length).trim();
+    afterText = afterText.replace(/^\s*```/, '').trim();
+
     return {
-      svgContent,
+      svgContent: svgBody,
       beforeText,
       afterText
     };
   }
-  
+
+  // 兼容缺失结束反引号的情况
+  const svgStartRegex = /```(?:svg)?\s*<svg[\s\S]*$/i;
+  const startMatch = content.match(svgStartRegex);
+
+  if (startMatch) {
+    const startIndex = startMatch.index;
+    const beforeText = content.substring(0, startIndex).trim();
+    let svgSection = content.substring(startIndex).replace(/```(?:svg)?\s*/i, '').trim();
+
+    // 去掉尾部残留的反引号
+    svgSection = svgSection.replace(/```$/, '').trim();
+
+    // 拆分 SVG 正文与额外文本
+    let afterText = '';
+    const svgEndIndex = svgSection.lastIndexOf('</svg>');
+    if (svgEndIndex !== -1) {
+      afterText = svgSection.substring(svgEndIndex + 6).replace(/```/, '').trim();
+      svgSection = svgSection.substring(0, svgEndIndex + 6).trim();
+    }
+
+    // 补齐缺失的结束标签
+    if (svgSection && !svgSection.endsWith('</svg>')) {
+      svgSection += '\n</svg>';
+    }
+
+    return {
+      svgContent: svgSection || null,
+      beforeText,
+      afterText
+    };
+  }
+
   return {
     svgContent: null,
-    beforeText: response,
+    beforeText: content.trim(),
     afterText: ''
   };
 }

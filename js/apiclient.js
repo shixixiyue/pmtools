@@ -133,7 +133,7 @@ class APIClient {
       { role: 'user', content: userRequest }
     ];
 
-    return await this.sendChatMessage(messages, { maxTokens: 3000 });
+    return await this.sendChatMessage(messages, { maxTokens: 18000 });
   }
 
   // 生成SWOT分析的专用方法
@@ -144,7 +144,7 @@ class APIClient {
       { role: 'user', content: userRequest }
     ];
 
-    return await this.sendChatMessage(messages, { maxTokens: 3000 });
+    return await this.sendChatMessage(messages, { maxTokens: 18000 });
   }
 
   // 流式生成产品画布
@@ -155,7 +155,7 @@ class APIClient {
       { role: 'user', content: userRequest }
     ];
 
-    return await this.sendChatMessageStream(messages, { maxTokens: 3000 }, onChunk, onComplete);
+    return await this.sendChatMessageStream(messages, { maxTokens: 13000 }, onChunk, onComplete);
   }
 
   // 流式生成SWOT分析
@@ -166,7 +166,7 @@ class APIClient {
       { role: 'user', content: userRequest }
     ];
 
-    return await this.sendChatMessageStream(messages, { maxTokens: 3000 }, onChunk, onComplete);
+    return await this.sendChatMessageStream(messages, { maxTokens: 13000 }, onChunk, onComplete);
   }
 
   // 流式发送聊天请求
