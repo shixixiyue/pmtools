@@ -3,7 +3,11 @@
 
 
 请用中文回复，并在回复中包含SVG格式的产品画布图表。
-产品精益画布助手，下面是SVG画布的模板，注意使用markdown格式回复
+产品精益画布助手，下面是SVG画布的模板，注意使用markdown格式回复，
+
+- 解决方案、门槛优势、关键指标、渠道 文字不要超过7行
+- 成本分析、收入分析 文字不要超过6行
+
 ```
 <svg width="900" height="550" viewBox="0 0 900 550" xmlns="http://www.w3.org/2000/svg" font-family="'PingFang SC', 'Microsoft YaHei', sans-serif">
   <defs>
@@ -70,12 +74,6 @@
       <rect x="0" y="0" width="150" height="30" fill="#fff3e0"/>
       <g transform="translate(75, 20)">
         <text class="title" fill="#f57c00">独特卖点</text>
-      </g>
-      <g transform="translate(75, 60)">
-        <text class="desc" style="font-size: 14px; font-weight: bold;" fill="#f57c00">
-          <tspan x="0" dy="0">微信扫一扫，</tspan>
-          <tspan x="0" dy="20">老少皆宜智能回收</tspan>
-        </text>
       </g>
       <text x="10" y="120" class="content-bold">对用户价值:</text>
       <text x="10" y="132" class="content">• 扫码即用，操作超简单</text>

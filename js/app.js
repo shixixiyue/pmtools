@@ -28,6 +28,10 @@ class ProductCanvasApp {
     this.updateModeUI();
   }
 
+  getModeDisplayName(mode = this.currentMode) {
+    return mode === 'canvas' ? '产品画布' : 'SWOT分析';
+  }
+
   // 初始化DOM元素引用
   initElements() {
     // 模式切换按钮
@@ -126,6 +130,8 @@ class ProductCanvasApp {
       canvas: savedCanvasSVGs,
       swot: savedSwotSVGs
     };
+
+    this.renderSvgViewerForMode();
     
     // 加载API配置
     const apiConfig = window.apiClient.getConfig();
@@ -140,7 +146,12 @@ class ProductCanvasApp {
     
     this.currentMode = mode;
     Utils.storage.set('currentMode', mode);
+    this.currentSvgId = null;
+    this.currentMode = mode;
+    Utils.storage.set('currentMode', mode);
     this.updateModeUI();
+    this.renderConversationHistory();
+    this.renderSvgViewerForMode();
   }
 
   // 更新模式UI
@@ -163,6 +174,42 @@ class ProductCanvasApp {
       if (!this.currentSvgId) {
         this.placeholderText.textContent = '生成的SWOT分析将在此处显示';
       }
+    }
+  }
+
+  showSvgPlaceholder() {
+    const label = this.getModeDisplayName();
+    this.currentSvgId = null;
+    this.svgViewer.innerHTML = `
+      <div id="svg-placeholder" class="text-center text-gray-400">
+        <iconify-icon icon="ph:image-square" class="text-6xl mx-auto text-purple-400"></iconify-icon>
+        <p class="mt-2 font-bold" id="placeholder-text">生成的${label}将在此处显示</p>
+      </div>
+    `;
+  }
+
+  renderSvgViewerForMode() {
+    const svgStore = this.svgStorage[this.currentMode] || {};
+    const history = this.conversationHistory[this.currentMode] || [];
+
+    let latestSvgId = null;
+    for (let i = history.length - 1; i >= 0; i--) {
+      const message = history[i];
+      if (message.type !== 'ai') continue;
+      for (const [svgId, svg] of Object.entries(svgStore)) {
+        if (svg.messageId === message.id) {
+          latestSvgId = svgId;
+          break;
+        }
+      }
+      if (latestSvgId) break;
+    }
+
+    if (latestSvgId && svgStore[latestSvgId]) {
+      this.currentSvgId = latestSvgId;
+      this.svgViewer.innerHTML = svgStore[latestSvgId].content;
+    } else {
+      this.showSvgPlaceholder();
     }
   }
 
@@ -729,30 +776,62 @@ class ProductCanvasApp {
     
     // 获取当前模式的对话历史
     const currentHistory = this.conversationHistory[this.currentMode] || [];
+    const currentSvgStorage = this.svgStorage[this.currentMode] || {};
+    let hasStorageUpdate = false;
+    let hasHistoryUpdate = false;
     
     for (const message of currentHistory) {
       if (message.type === 'ai') {
         const parsed = Utils.parseSVGResponse(message.content);
         
-        // 查找对应的SVG
+        // 查找或补建对应的SVG
         let svgId = null;
-        const currentSvgStorage = this.svgStorage[this.currentMode] || {};
         for (const [id, svg] of Object.entries(currentSvgStorage)) {
           if (svg.messageId === message.id) {
             svgId = id;
             break;
           }
         }
-        
-        if (svgId && parsed.svgContent) {
+
+        const hasSvgContent = parsed.svgContent && parsed.svgContent.includes('<svg');
+        if (hasSvgContent) {
+          if (!svgId) {
+            const normalizedSvg = parsed.svgContent.trim().endsWith('</svg>')
+              ? parsed.svgContent.trim()
+              : `${parsed.svgContent.trim()}\n</svg>`;
+            svgId = Utils.generateId('svg');
+            currentSvgStorage[svgId] = {
+              content: normalizedSvg,
+              messageId: message.id,
+              mode: this.currentMode,
+              timestamp: message.timestamp || new Date().toISOString()
+            };
+            parsed.svgContent = normalizedSvg;
+            message.content = this.buildSVGMessageContent(parsed.beforeText, normalizedSvg, parsed.afterText);
+            hasStorageUpdate = true;
+            hasHistoryUpdate = true;
+          }
           this.renderMessageWithSVG(message, parsed, svgId);
-        } else {
-          this.renderMessage(message);
+          continue;
         }
+        
+        this.renderMessage(message);
       } else {
         this.renderMessage(message);
       }
     }
+
+    if (hasStorageUpdate) {
+      this.svgStorage[this.currentMode] = currentSvgStorage;
+      Utils.storage.set('canvasSVGs', this.svgStorage.canvas || {});
+      Utils.storage.set('swotSVGs', this.svgStorage.swot || {});
+    }
+    if (hasHistoryUpdate) {
+      Utils.storage.set('canvasHistory', this.conversationHistory.canvas || []);
+      Utils.storage.set('swotHistory', this.conversationHistory.swot || []);
+    }
+
+    Utils.scrollToBottom(this.chatHistory);
   }
 
   // 显示SVG
