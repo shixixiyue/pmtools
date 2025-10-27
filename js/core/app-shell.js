@@ -30,6 +30,8 @@
       this.pendingCancel = false;
       this.streamState = null;
       this.echartsInstance = null;
+      this.mermaidPanZoom = null;
+      this.mermaidInitialized = false;
 
       this.globalStore = moduleRuntime.storageService.global();
       this.activeModuleId = null;
@@ -138,17 +140,23 @@
 
       if (this.el.downloadSvgBtn) {
         this.el.downloadSvgBtn.addEventListener('click', () =>
-          this.downloadArtifact()
+          this.downloadArtifact().catch((error) =>
+            console.error('下载SVG失败:', error)
+          )
         );
       }
       if (this.el.copyImageBtn) {
         this.el.copyImageBtn.addEventListener('click', () =>
-          this.copyArtifactImage()
+          this.copyArtifactImage().catch((error) =>
+            console.error('复制图片失败:', error)
+          )
         );
       }
       if (this.el.exportImageBtn) {
         this.el.exportImageBtn.addEventListener('click', () =>
-          this.exportArtifactAsImage()
+          this.exportArtifactAsImage().catch((error) =>
+            console.error('导出图片失败:', error)
+          )
         );
       }
       if (this.el.viewCodeBtn) {
@@ -723,6 +731,8 @@
         this.updateStreamingContent(container, fullContent);
         if (manifest.artifact?.type === 'svg') {
           this.processSvgStreamChunk(manifest, fullContent, streamState);
+        } else if (manifest.artifact?.type === 'mermaid') {
+          this.processMermaidStreamChunk(manifest, fullContent, streamState);
         }
       };
 
@@ -818,6 +828,19 @@
               timestamp
             };
           } else if (
+            manifest.artifact.type === 'mermaid' &&
+            parsedResult.code
+          ) {
+            artifactId = Utils.generateId('mermaid');
+            artifactPayload = {
+              id: artifactId,
+              type: manifest.artifact.type,
+              code: parsedResult.code,
+              svgContent: streamContext?.mermaid?.svgContent || null,
+              messageId,
+              timestamp
+            };
+          } else if (
             manifest.artifact.type === 'echarts-option' &&
             parsedResult.option
           ) {
@@ -887,6 +910,11 @@
 
       if (parsedResult) {
         if (manifest.artifact?.type === 'svg') {
+          const before = trim(parsedResult.beforeText);
+          const after = trim(parsedResult.afterText);
+          if (before) segments.push(before);
+          if (after) segments.push(after);
+        } else if (manifest.artifact?.type === 'mermaid') {
           const before = trim(parsedResult.beforeText);
           const after = trim(parsedResult.afterText);
           if (before) segments.push(before);
@@ -995,23 +1023,231 @@
     }
 
     renderTemporarySvg(svgMarkup, isPartial = false, manifest = null) {
-      if (!this.el.viewer || !svgMarkup) return;
-      this.el.viewer.innerHTML = '';
-      const wrapper = document.createElement('div');
-      wrapper.className = 'svg-content-wrapper';
-      wrapper.innerHTML = svgMarkup;
-      this.el.viewer.appendChild(wrapper);
-      if (isPartial) {
-        wrapper.style.opacity = '0.9';
-      } else {
-        wrapper.style.opacity = '1';
+      const moduleId = manifest?.id || this.activeModuleId;
+      this.renderSvgMarkup(svgMarkup, moduleId, {
+        opacity: isPartial ? 0.9 : 1
+      });
+    }
+
+    getCurrentEChartsSvgElement() {
+      if (!this.echartsInstance) return null;
+      const dom = this.echartsInstance.getDom();
+      if (!dom) return null;
+      return dom.querySelector('svg');
+    }
+
+    getSvgStringFromElement(svgElement) {
+      if (!svgElement) return null;
+      const serializer = new XMLSerializer();
+      let svgContent = serializer.serializeToString(svgElement);
+      if (!svgContent.match(/^<svg[^>]+xmlns=/)) {
+        svgContent = svgContent.replace(
+          '<svg',
+          '<svg xmlns="http://www.w3.org/2000/svg"'
+        );
       }
-      const uiState = this.runtime.getUiState(
+      return svgContent;
+    }
+
+    initializeMermaidPanZoom(svgElement, manifest) {
+      if (!svgElement) return;
+      if (!window.svgPanZoom) {
+        console.warn('svgPanZoom 脚本未加载，无法提供平移缩放');
+        return;
+      }
+      this.destroyMermaidPanZoom();
+      let doPan = false;
+      let mousePos = { x: 0, y: 0 };
+      let panZoomInstance = null;
+
+      const onMouseDown = (ev) => {
+        if (!ev) return;
+        doPan = true;
+        mousePos = { x: ev.clientX, y: ev.clientY };
+      };
+      const onMouseMove = (ev) => {
+        if (!doPan || !panZoomInstance) return;
+        panZoomInstance.panBy({
+          x: ev.clientX - mousePos.x,
+          y: ev.clientY - mousePos.y
+        });
+        mousePos = { x: ev.clientX, y: ev.clientY };
+        const selection = window.getSelection && window.getSelection();
+        if (selection && selection.removeAllRanges) {
+          selection.removeAllRanges();
+        }
+      };
+      const onMouseUp = () => {
+        doPan = false;
+      };
+
+      const eventsHandler = {
+        haltEventListeners: ['mousedown', 'mousemove', 'mouseup'],
+        init(options) {
+          options.svgElement.addEventListener('mousedown', onMouseDown, false);
+          options.svgElement.addEventListener('mousemove', onMouseMove, false);
+          options.svgElement.addEventListener('mouseup', onMouseUp, false);
+        },
+        destroy(options) {
+          options.svgElement.removeEventListener('mousedown', onMouseDown, false);
+          options.svgElement.removeEventListener('mousemove', onMouseMove, false);
+          options.svgElement.removeEventListener('mouseup', onMouseUp, false);
+        }
+      };
+
+      this.mermaidPanZoom = window.svgPanZoom(svgElement, {
+        zoomEnabled: true,
+        controlIconsEnabled: true,
+        fit: true,
+        center: true,
+        minZoom: 0.25,
+        maxZoom: 3,
+        customEventsHandler: eventsHandler
+      });
+      panZoomInstance = this.mermaidPanZoom;
+
+      const uiState = this.runtime.getUiState(manifest.id, { zoom: 1 });
+      const initialZoom = uiState.zoom || 1;
+      this.mermaidPanZoom.zoom(initialZoom);
+      this.mermaidPanZoom.setOnZoom((zoomLevel) => {
+        this.runtime.updateUiState(manifest.id, { zoom: zoomLevel });
+      });
+    }
+
+    destroyMermaidPanZoom() {
+      if (this.mermaidPanZoom && typeof this.mermaidPanZoom.destroy === 'function') {
+        this.mermaidPanZoom.destroy();
+      }
+      this.mermaidPanZoom = null;
+    }
+
+    isZoomableManifest(manifest) {
+      const type = manifest?.artifact?.type;
+      return type === 'svg' || type === 'mermaid';
+    }
+
+    processMermaidStreamChunk(manifest, fullContent, streamState) {
+      if (!streamState) return;
+      if (!streamState.mermaid) {
+        streamState.mermaid = {
+          started: false,
+          artifactId: null,
+          beforeText: ''
+        };
+      }
+      const ctx = streamState.mermaid;
+      const startPattern = manifest.artifact?.startPattern || /```mermaid/i;
+      if (!ctx.started) {
+        const match = fullContent.match(startPattern);
+        if (match) {
+          ctx.started = true;
+          ctx.artifactId = ctx.artifactId || Utils.generateId('mermaid');
+          ctx.beforeText = fullContent.substring(0, match.index);
+          this.updateMermaidPlaceholder(streamState.container, manifest, ctx);
+          this.showViewerStreaming(manifest);
+        }
+      }
+    }
+
+    updateMermaidPlaceholder(container, manifest, ctx) {
+      if (!container) return;
+      const beforeHtml = this.parseMarkdownContent(ctx.beforeText || '');
+      const label = manifest.label || '图表';
+      container.innerHTML = `
+        <div class="chat-bubble-ai relative streaming-text" data-message-id="${container.dataset.messageId}">
+          <div>
+            ${beforeHtml}
+            <div class="svg-drawing-placeholder" data-temp-id="${ctx.artifactId}">
+              🧠 正在生成${label}代码...
+            </div>
+            <div class="typing-cursor"></div>
+          </div>
+        </div>
+      `;
+      Utils.scrollToBottom(this.el.chatHistory);
+    }
+
+    async ensureMermaidReady() {
+      if (this.mermaidInitialized) return;
+      if (!window.mermaid) {
+        throw new Error('Mermaid 脚本未加载，请检查资源引入');
+      }
+      window.mermaid.initialize({
+        startOnLoad: false,
+        securityLevel: 'loose',
+        theme: 'default'
+      });
+      this.mermaidInitialized = true;
+    }
+
+    async renderMermaidArtifact(artifact, manifest) {
+      if (!this.el.viewer) return;
+      this.showViewerStreaming(manifest);
+      try {
+        const svgContent = await this.getMermaidSvgContent(
+          artifact,
+          manifest
+        );
+        this.destroyMermaidPanZoom();
+        this.renderSvgMarkup(svgContent, this.activeModuleId, {
+          applyTransform: false
+        });
+        const svgElement = this.el.viewer.querySelector('svg');
+        if (svgElement) {
+          svgElement.setAttribute('id', 'mermaidSvg');
+          this.initializeMermaidPanZoom(svgElement, manifest);
+        }
+      } catch (error) {
+        this.destroyMermaidPanZoom();
+        console.error('Mermaid 渲染失败:', error);
+        this.el.viewer.innerHTML = `
+          <div class="p-4 text-center text-red-500 font-bold">
+            Mermaid 渲染失败：${Utils.escapeHtml(error.message || '未知错误')}
+          </div>
+        `;
+      }
+    }
+
+    async getMermaidSvgContent(artifact, manifest) {
+      if (artifact.svgContent) {
+        return artifact.svgContent;
+      }
+      await this.ensureMermaidReady();
+      const renderId = `mermaid-${artifact.id || Utils.generateId('mermaid')}-${Date.now()}`;
+      const code = artifact.code || artifact.content || '';
+      if (!code.trim()) {
+        throw new Error('缺少 Mermaid 代码，无法渲染');
+      }
+      const { svg } = await window.mermaid.render(renderId, code);
+      const updatedArtifact = {
+        ...artifact,
+        svgContent: svg
+      };
+      this.runtime.saveArtifact(
         manifest?.id || this.activeModuleId,
-        { zoom: 1 }
+        updatedArtifact.id,
+        updatedArtifact
       );
-      wrapper.style.transform = `scale(${uiState.zoom})`;
-      wrapper.style.transformOrigin = 'center top';
+      return svg;
+    }
+
+    async getSvgMarkupForArtifact(artifact, manifest) {
+      if (!artifact) return null;
+      if (artifact.type === 'svg') {
+        return artifact.content;
+      }
+      if (artifact.type === 'mermaid') {
+        return await this.getMermaidSvgContent(
+          artifact,
+          manifest || this.getActiveManifest()
+        );
+      }
+      if (artifact.type === 'echarts-option') {
+        const svgElement = this.getCurrentEChartsSvgElement();
+        if (!svgElement) return null;
+        return this.getSvgStringFromElement(svgElement);
+      }
+      return null;
     }
 
     openCodeModal(content = '') {
@@ -1101,8 +1337,12 @@
       }
       this.runtime.setActiveArtifact(manifest.id, artifactId);
       if (artifact.type === 'svg') {
+        this.destroyMermaidPanZoom();
         this.renderSvgArtifact(artifact);
+      } else if (artifact.type === 'mermaid') {
+        this.renderMermaidArtifact(artifact, manifest);
       } else if (artifact.type === 'echarts-option') {
+        this.destroyMermaidPanZoom();
         this.renderEChartsArtifact(artifact);
       }
       this.highlightActivePlaceholder();
@@ -1110,16 +1350,26 @@
     }
 
     renderSvgArtifact(artifact) {
-      if (!this.el.viewer) return;
+      this.renderSvgMarkup(artifact.content, this.activeModuleId);
+    }
+
+    renderSvgMarkup(svgMarkup, moduleId = this.activeModuleId, options = {}) {
+      if (!this.el.viewer || !svgMarkup) return;
+      const { opacity = 1, applyTransform = true } = options;
       this.el.viewer.innerHTML = '';
       const wrapper = document.createElement('div');
       wrapper.className = 'svg-content-wrapper';
-      wrapper.innerHTML = artifact.content;
+      wrapper.innerHTML = svgMarkup;
+      wrapper.style.opacity = opacity;
       this.el.viewer.appendChild(wrapper);
-      const uiState = this.runtime.getUiState(this.activeModuleId, {
+      const uiState = this.runtime.getUiState(moduleId, {
         zoom: 1
       });
-      wrapper.style.transform = `scale(${uiState.zoom})`;
+      if (applyTransform) {
+        wrapper.style.transform = `scale(${uiState.zoom})`;
+      } else {
+        wrapper.style.transform = '';
+      }
       wrapper.style.transformOrigin = 'center top';
     }
 
@@ -1142,31 +1392,46 @@
         this.echartsInstance.dispose();
       }
       this.echartsInstance = window.echarts.init(chartContainer, null, {
-        renderer: 'canvas'
+        renderer: 'svg',
+        useDirtyRect: false
       });
       this.echartsInstance.setOption(artifact.option, true);
     }
 
     adjustZoom(delta) {
       const manifest = this.getActiveManifest();
-      if (manifest.artifact?.type !== 'svg') return;
+      if (!this.isZoomableManifest(manifest)) return;
       const uiState = this.runtime.getUiState(manifest.id, { zoom: 1 });
       const nextZoom = Math.min(
         3,
         Math.max(0.25, parseFloat((uiState.zoom + delta).toFixed(2)))
       );
       this.runtime.updateUiState(manifest.id, { zoom: nextZoom });
-      this.renderActiveArtifact();
+
+      if (manifest.artifact?.type === 'mermaid') {
+        if (this.mermaidPanZoom) {
+          this.mermaidPanZoom.zoom(nextZoom);
+        }
+      } else {
+        this.renderActiveArtifact();
+      }
     }
 
     resetZoom() {
       const manifest = this.getActiveManifest();
-      if (manifest.artifact?.type !== 'svg') return;
+      if (!this.isZoomableManifest(manifest)) return;
       this.runtime.updateUiState(manifest.id, { zoom: 1 });
-      this.renderActiveArtifact();
+      if (manifest.artifact?.type === 'mermaid') {
+        if (this.mermaidPanZoom) {
+          this.mermaidPanZoom.zoom(1);
+          this.mermaidPanZoom.resetPan();
+        }
+      } else {
+        this.renderActiveArtifact();
+      }
     }
 
-    downloadArtifact() {
+    async downloadArtifact() {
       const manifest = this.getActiveManifest();
       const state = this.runtime.getState(manifest.id);
       const id = state.currentArtifactId;
@@ -1174,11 +1439,12 @@
       const artifact = state.artifacts[id];
       if (!artifact) return;
 
-      if (artifact.type === 'svg') {
-        Utils.downloadFile(artifact.content, `${manifest.id}.svg`, 'image/svg+xml');
-      } else {
+      const svgMarkup = await this.getSvgMarkupForArtifact(artifact, manifest);
+      if (!svgMarkup) {
         alert('当前图表不支持导出 SVG，请使用导出图片功能');
+        return;
       }
+      Utils.downloadFile(svgMarkup, `${manifest.id}.svg`, 'image/svg+xml');
     }
 
     async copyArtifactImage() {
@@ -1189,12 +1455,13 @@
       const artifact = state.artifacts[id];
       if (!artifact) return;
 
-      if (artifact.type !== 'svg') {
+      const svgContent = await this.getSvgMarkupForArtifact(artifact, manifest);
+      if (!svgContent) {
         alert('暂不支持复制此类型图表到剪贴板');
         return;
       }
 
-      const svgBlob = new Blob([artifact.content], {
+      const svgBlob = new Blob([svgContent], {
         type: 'image/svg+xml'
       });
       const svgUrl = URL.createObjectURL(svgBlob);
@@ -1210,7 +1477,14 @@
         ctx.setTransform(this.imageExportScale, 0, 0, this.imageExportScale, 0, 0);
         ctx.drawImage(image, 0, 0);
 
+        const finalize = () => URL.revokeObjectURL(svgUrl);
+
         canvas.toBlob(async (blob) => {
+          if (!blob) {
+            finalize();
+            alert('复制失败，请稍后再试');
+            return;
+          }
           try {
             const clipboardItem = new ClipboardItem({ 'image/png': blob });
             await navigator.clipboard.write([clipboardItem]);
@@ -1219,13 +1493,17 @@
             console.error('复制失败:', error);
             alert('复制失败，请稍后再试');
           } finally {
-            URL.revokeObjectURL(svgUrl);
+            finalize();
           }
         });
       };
+      image.onerror = () => {
+        URL.revokeObjectURL(svgUrl);
+        alert('复制失败，请稍后再试');
+      };
     }
 
-    exportArtifactAsImage() {
+    async exportArtifactAsImage() {
       const manifest = this.getActiveManifest();
       const state = this.runtime.getState(manifest.id);
       const id = state.currentArtifactId;
@@ -1233,8 +1511,9 @@
       const artifact = state.artifacts[id];
       if (!artifact) return;
 
-      if (artifact.type === 'svg') {
-        const svgBlob = new Blob([artifact.content], {
+      const svgContent = await this.getSvgMarkupForArtifact(artifact, manifest);
+      if (svgContent) {
+        const svgBlob = new Blob([svgContent], {
           type: 'image/svg+xml'
         });
         const svgUrl = URL.createObjectURL(svgBlob);
@@ -1257,7 +1536,14 @@
           document.body.removeChild(link);
           URL.revokeObjectURL(svgUrl);
         };
-      } else if (artifact.type === 'echarts-option') {
+        image.onerror = () => {
+          URL.revokeObjectURL(svgUrl);
+          alert('导出图片失败，请稍后再试');
+        };
+        return;
+      }
+
+      if (artifact.type === 'echarts-option') {
         if (!this.echartsInstance) {
           alert('图表实例未准备好，无法导出');
           return;
@@ -1336,7 +1622,8 @@
       const state = this.runtime.getState(manifest.id);
       const hasArtifact = !!state.currentArtifactId;
 
-      if (manifest.artifact?.type !== 'svg') {
+      const isZoomable = this.isZoomableManifest(manifest);
+      if (!isZoomable) {
         this.el.zoomInBtn && (this.el.zoomInBtn.disabled = true);
         this.el.zoomOutBtn && (this.el.zoomOutBtn.disabled = true);
         this.el.zoomResetBtn && (this.el.zoomResetBtn.disabled = true);
@@ -1362,7 +1649,6 @@
         this.el.copyImageBtn.disabled =
           !hasArtifact ||
           !this.copyClipboardSupported ||
-          manifest.artifact?.type !== 'svg' ||
           manifest.exports?.allowClipboard === false;
       }
       if (this.el.exportImageBtn) {
@@ -1388,6 +1674,7 @@
         this.echartsInstance.dispose();
         this.echartsInstance = null;
       }
+      this.destroyMermaidPanZoom();
       this.renderConversationHistory();
       this.showViewerPlaceholder(manifest.ui?.placeholderText || '');
       this.updateToolbarState();

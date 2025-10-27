@@ -284,7 +284,10 @@ iconify-icon {
 }
 
 .svg-content-wrapper {
+  flex: 1;
+  margin: 1rem;
   display: inline-block;
+  text-align: center;
   transform-origin: center top;
 }
 
