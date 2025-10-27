@@ -78,6 +78,10 @@
       this.el.saveConfigBtn = document.getElementById('save-config-btn');
       this.el.configStatus = document.getElementById('config-status');
       this.el.statusText = document.getElementById('status-text');
+      this.el.codeModal = document.getElementById('code-modal');
+      this.el.codeContent = document.getElementById('code-content');
+      this.el.copyCodeBtn = document.getElementById('copy-code-btn');
+      this.el.closeCodeModalBtn = document.getElementById('close-code-modal-btn');
 
       // 复制按钮可用性
       if (this.el.copyImageBtn && !this.copyClipboardSupported) {
@@ -185,6 +189,24 @@
           const action = actionBtn.dataset.action;
           const messageId = actionBtn.dataset.messageId;
           this.handleMessageAction(action, messageId);
+        });
+      }
+
+      if (this.el.copyCodeBtn) {
+        this.el.copyCodeBtn.addEventListener('click', () =>
+          this.copyCodeContent()
+        );
+      }
+      if (this.el.closeCodeModalBtn) {
+        this.el.closeCodeModalBtn.addEventListener('click', () =>
+          this.closeCodeModal()
+        );
+      }
+      if (this.el.codeModal) {
+        this.el.codeModal.addEventListener('click', (event) => {
+          if (event.target === this.el.codeModal) {
+            this.closeCodeModal();
+          }
         });
       }
     }
@@ -992,6 +1014,56 @@
       wrapper.style.transformOrigin = 'center top';
     }
 
+    openCodeModal(content = '') {
+      if (!this.el.codeModal) return;
+      if (this.el.codeContent) {
+        this.el.codeContent.textContent = content || '';
+      }
+      this.el.codeModal.classList.add('active');
+      this.el.codeModal.style.display = 'flex';
+    }
+
+    closeCodeModal() {
+      if (!this.el.codeModal) return;
+      this.el.codeModal.classList.remove('active');
+      this.el.codeModal.style.display = 'none';
+    }
+
+    async copyCodeContent() {
+      if (!this.el.codeContent) return;
+      const text = this.el.codeContent.textContent || '';
+      if (!text) {
+        alert('没有可复制的内容');
+        return;
+      }
+      if (navigator.clipboard && navigator.clipboard.writeText) {
+        try {
+          await navigator.clipboard.writeText(text);
+          alert('代码已复制到剪贴板');
+          return;
+        } catch (error) {
+          console.warn('复制到剪贴板失败:', error);
+        }
+      }
+      // 兼容处理
+      const textarea = document.createElement('textarea');
+      textarea.value = text;
+      textarea.setAttribute('readonly', '');
+      textarea.style.position = 'absolute';
+      textarea.style.left = '-9999px';
+      document.body.appendChild(textarea);
+      textarea.select();
+      try {
+        document.execCommand('copy');
+        alert('代码已复制到剪贴板');
+      } catch (error) {
+        console.warn('备用复制失败:', error);
+        alert('复制失败，请手动复制');
+      } finally {
+        document.body.removeChild(textarea);
+      }
+    }
+
 
     cancelActiveStream() {
       if (!this.activeStreamHandle || typeof this.activeStreamHandle.cancel !== 'function') {
@@ -1219,11 +1291,7 @@
         content = artifact.optionText || JSON.stringify(artifact.option, null, 2);
       }
 
-      const blob = new Blob([content], { type: 'text/plain' });
-      const url = URL.createObjectURL(blob);
-      window.open(url, '_blank');
-
-      setTimeout(() => URL.revokeObjectURL(url), 1000 * 30);
+      this.openCodeModal(content);
     }
 
     setSendButtonState(state) {

@@ -66,9 +66,9 @@
       }
     },
     exports: {
-      allowSvg: false,
+      allowSvg: true,
       allowPng: true,
-      allowClipboard: false,
+      allowClipboard: true,
       allowCode: true
     },
     ui: {

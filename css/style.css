@@ -329,6 +329,25 @@ iconify-icon {
   overflow-y: auto;
 }
 
+.code-modal-content {
+  max-width: 760px;
+}
+
+.code-viewer {
+  background: #0f172a;
+  color: #f8fafc;
+  border: 2px solid #000;
+  padding: 16px;
+  font-family: 'Fira Code', 'Courier New', Courier, monospace;
+  font-size: 14px;
+  line-height: 1.6;
+  border-radius: 6px;
+  max-height: 60vh;
+  overflow: auto;
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+
 /* 表单输入框样式 */
 .config-input {
   width: 100%;

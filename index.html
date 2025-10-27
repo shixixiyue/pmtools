@@ -4,12 +4,10 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>产品画布 / SWOT分析</title>
-    <script src="https://cdn.tailwindcss.com/3.4.1"></script>
-    <script src="https://code.iconify.design/iconify-icon/2.1.0/iconify-icon.min.js"></script>
-    <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
-    <link rel="preconnect" href="https://fonts.googleapis.com">
-    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;700;900&display=swap" rel="stylesheet">
+    <script src="libs/css/tailwind.css"></script>
+    <script src="libs/js/iconify-icon.min.js"></script>
+    <script src="libs/js/marked.min.js"></script>
+    <link rel="stylesheet" href="libs/css/inter-font.css">
     <link rel="stylesheet" href="css/style.css">
 </head>
 <body class="bg-gray-100 h-screen flex flex-col">
@@ -196,6 +194,31 @@
       </div>
     </div>
 
+    <!-- 代码查看模态窗 -->
+    <div id="code-modal" class="modal-overlay">
+      <div class="modal-content code-modal-content">
+        <div class="bg-gradient-to-r from-indigo-600 to-purple-600 p-4 border-b-4 border-black flex items-center justify-between">
+          <div class="flex items-center gap-2">
+            <iconify-icon icon="ph:code-fill" class="text-3xl text-white"></iconify-icon>
+            <h2 class="text-xl font-black text-white">生成代码</h2>
+          </div>
+          <button id="close-code-modal-btn" class="text-white hover:bg-white/20 p-2 transition-all">
+            <iconify-icon icon="ph:x-bold" class="text-2xl"></iconify-icon>
+          </button>
+        </div>
+        <div class="p-6 space-y-4">
+          <div class="flex items-center justify-between gap-3">
+            <p class="font-bold text-gray-700">以下为当前图表对应的代码，可复制后用于自定义编辑。</p>
+            <button id="copy-code-btn" class="px-4 py-2 bg-indigo-500 text-white font-bold border-2 border-black hover:bg-indigo-600 transition-all flex items-center gap-2">
+              <iconify-icon icon="ph:copy-bold"></iconify-icon>
+              复制代码
+            </button>
+          </div>
+          <pre id="code-content" class="code-viewer"></pre>
+        </div>
+      </div>
+    </div>
+
     <!-- 引入JavaScript文件 -->
     <script src="js/utils.js"></script>
     <script src="js/services/storage-service.js"></script>
@@ -204,7 +227,7 @@
     <script src="js/modules/product-canvas.js"></script>
     <script src="js/modules/swot.js"></script>
     <script src="js/modules/echarts.js"></script>
-    <script src="https://cdn.jsdelivr.net/npm/echarts@5/dist/echarts.min.js"></script>
+    <script src="libs/js/echarts.min.js"></script>
     <script src="js/core/module-runtime.js"></script>
     <script src="js/core/app-shell.js"></script>
     <script src="js/apiclient.js"></script>
