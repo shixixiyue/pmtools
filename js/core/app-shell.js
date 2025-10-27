@@ -1049,7 +1049,8 @@
       return svgContent;
     }
 
-    initializeMermaidPanZoom(svgElement, manifest) {
+    initializeMermaidPanZoom(svgElementid, manifest) {
+      let svgElement = document.getElementById(svgElementid);
       if (!svgElement) return;
       if (!window.svgPanZoom) {
         console.warn('svgPanZoom 脚本未加载，无法提供平移缩放');
@@ -1095,7 +1096,7 @@
         }
       };
 
-      this.mermaidPanZoom = window.svgPanZoom(svgElement, {
+      this.mermaidPanZoom = window.svgPanZoom(`#${svgElementid}`, {
         zoomEnabled: true,
         controlIconsEnabled: true,
         fit: true,
@@ -1194,8 +1195,8 @@
         });
         const svgElement = this.el.viewer.querySelector('svg');
         if (svgElement) {
-          svgElement.setAttribute('id', 'mermaidSvg');
-          this.initializeMermaidPanZoom(svgElement, manifest);
+          const svgid = svgElement.getAttribute('id', 'mermaidSvg');
+          this.initializeMermaidPanZoom(svgid, manifest);
         }
       } catch (error) {
         this.destroyMermaidPanZoom();
