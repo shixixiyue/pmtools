@@ -1233,6 +1233,229 @@
       return svg;
     }
 
+    getMermaidCode(artifact) {
+      if (!artifact) return '';
+      const code = artifact.code || artifact.content || '';
+      return typeof code === 'string' ? code : String(code || '');
+    }
+
+    getMermaidImageWidth(svgElement, svgMarkup) {
+      if (!svgElement) return null;
+      let width = null;
+      try {
+        if (typeof svgElement.getBBox === 'function') {
+          width = svgElement.getBBox().width;
+        }
+      } catch (error) {
+        console.warn('计算 Mermaid 图宽度失败，回退到外框尺寸:', error);
+      }
+      if (!width || Number.isNaN(width) || width <= 0) {
+        const viewBox = svgElement.viewBox?.baseVal;
+        if (viewBox && viewBox.width > 0) {
+          width = viewBox.width;
+        }
+      }
+      if (!width || Number.isNaN(width) || width <= 0) {
+        const rect = svgElement.getBoundingClientRect?.();
+        if (rect && rect.width > 0) {
+          width = rect.width;
+        }
+      }
+      if ((!width || Number.isNaN(width) || width <= 0) && svgMarkup) {
+        const dims = this.parseSvgDimensions(svgMarkup);
+        if (dims.width && dims.width > 0) {
+          width = dims.width;
+        }
+      }
+      return width && width > 0 ? width : null;
+    }
+
+    encodeMermaidState(code) {
+      if (!window.pako) {
+        throw new Error('缺少 Pako 压缩依赖，无法导出 Mermaid 图片');
+      }
+      if (typeof TextEncoder === 'undefined') {
+        throw new Error('当前浏览器不支持 TextEncoder，无法导出 Mermaid 图片');
+      }
+      this.textEncoder = this.textEncoder || new TextEncoder();
+      const payload = {
+        code,
+        mermaid: {
+          theme: 'default'
+        },
+        autoSync: true,
+        updateDiagram: true,
+        editorMode: 'code'
+      };
+      const json = JSON.stringify(payload);
+      const compressed = window.pako.deflate(this.textEncoder.encode(json), {
+        level: 9
+      });
+      const chunkSize = 0x8000;
+      let binary = '';
+      for (let i = 0; i < compressed.length; i += chunkSize) {
+        const slice = compressed.subarray(i, Math.min(i + chunkSize, compressed.length));
+        binary += String.fromCharCode.apply(null, slice);
+      }
+      return btoa(binary).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
+    }
+
+    buildMermaidImageUrl(code, { type = 'png', width } = {}) {
+      const encoded = this.encodeMermaidState(code);
+      const params = new URLSearchParams();
+      params.set('type', type);
+      if (width && Number.isFinite(width) && width > 0) {
+        params.set('width', Math.round(width));
+      }
+      return `https://mermaid.ink/img/pako:${encoded}?${params.toString()}`;
+    }
+
+    getMermaidExportScale() {
+      return Math.max(6, this.imageExportScale);
+    }
+
+    parseSvgNumeric(value) {
+      if (value == null) return null;
+      const raw = String(value).trim();
+      if (!raw || raw.toLowerCase() === 'auto') {
+        return null;
+      }
+      const compact = raw.replace(/\s+/g, '');
+      const normalized = compact.replace(/!important$/i, '');
+      const lower = normalized.toLowerCase();
+      if (
+        lower.includes('calc(') ||
+        lower.includes('min(') ||
+        lower.includes('max(') ||
+        lower.includes('var(') ||
+        lower.endsWith('%')
+      ) {
+        return null;
+      }
+      const unitMatch = normalized.match(/[a-zA-Z]+$/);
+      if (unitMatch && unitMatch[0].toLowerCase() !== 'px') {
+        // 相对单位缺乏参照，留给 viewBox 等信息推导
+        return null;
+      }
+      const numeric = parseFloat(normalized.replace(/[^0-9.\-eE]/g, ''));
+      return Number.isFinite(numeric) ? numeric : null;
+    }
+
+    parseSvgDimensions(svgMarkup) {
+      if (!svgMarkup) return {};
+      try {
+        const parser = new DOMParser();
+        const doc = parser.parseFromString(svgMarkup, 'image/svg+xml');
+        const svgElement = doc.querySelector('svg');
+        if (!svgElement) {
+          return {};
+        }
+        const widthAttr = svgElement.getAttribute('width');
+        const heightAttr = svgElement.getAttribute('height');
+        const styleAttr = svgElement.getAttribute('style') || '';
+        let width = this.parseSvgNumeric(widthAttr);
+        let height = this.parseSvgNumeric(heightAttr);
+
+        if ((!width || !height) && styleAttr) {
+          const stylePairs = styleAttr
+            .split(';')
+            .map((item) => item.trim())
+            .filter(Boolean);
+          for (const pair of stylePairs) {
+            const [keyRaw, valRaw] = pair.split(':');
+            if (!keyRaw || !valRaw) continue;
+            const key = keyRaw.trim().toLowerCase();
+            const val = valRaw.trim();
+            if (!width && key === 'width') {
+              width = this.parseSvgNumeric(val);
+            } else if (!height && key === 'height') {
+              height = this.parseSvgNumeric(val);
+            }
+          }
+        }
+
+        if ((!width || !height) && svgElement.hasAttribute('viewBox')) {
+          const viewBox = svgElement.getAttribute('viewBox');
+          const parts = viewBox
+            .trim()
+            .split(/\s+/)
+            .map((part) => this.parseSvgNumeric(part));
+          if (parts.length === 4) {
+            const [, , vbWidth, vbHeight] = parts;
+            if (!width || width <= 0) width = vbWidth;
+            if (!height || height <= 0) height = vbHeight;
+          }
+        }
+
+        if (!width || width <= 0 || !height || height <= 0) {
+          return {};
+        }
+
+        return { width, height };
+      } catch (error) {
+        console.warn('解析 SVG 尺寸失败，将使用默认尺寸:', error);
+        return {};
+      }
+    }
+
+    computeExportSize(svgMarkup, image, artifactType) {
+      const defaultSize = 1024;
+      const dims = this.parseSvgDimensions(svgMarkup);
+      const naturalWidth = (image && (image.naturalWidth || image.width)) || null;
+      const naturalHeight = (image && (image.naturalHeight || image.height)) || null;
+      const baseWidth = dims.width || naturalWidth || defaultSize;
+      const baseHeight = dims.height || naturalHeight || defaultSize;
+      const safeHeight = baseHeight > 0 ? baseHeight : baseWidth;
+      const exportScale =
+        artifactType === 'mermaid' ? this.getMermaidExportScale() : this.imageExportScale;
+      const targetWidth = Math.max(1, Math.round(baseWidth * exportScale));
+      const targetHeight = Math.max(1, Math.round(safeHeight * exportScale));
+      return {
+        baseWidth,
+        baseHeight: safeHeight,
+        exportScale,
+        targetWidth,
+        targetHeight
+      };
+    }
+
+    async fetchMermaidImageBlob(artifact, options = {}) {
+      const code = this.getMermaidCode(artifact);
+      if (!code.trim()) {
+        throw new Error('缺少 Mermaid 代码，无法导出图像');
+      }
+      const manifest = this.getActiveManifest();
+      const svgContent = await this.getMermaidSvgContent(artifact, manifest);
+      const svgElement = this.el.viewer?.querySelector('svg');
+      const baseWidth = this.getMermaidImageWidth(svgElement, svgContent);
+      const exportMetrics = this.computeExportSize(svgContent, null, artifact.type);
+      const exportScale =
+        exportMetrics && Number.isFinite(exportMetrics.exportScale)
+          ? exportMetrics.exportScale
+          : this.getMermaidExportScale();
+      const scaledBaseWidth = baseWidth ? Math.round(baseWidth * exportScale) : 0;
+      const computedTargetWidth =
+        exportMetrics && exportMetrics.targetWidth ? exportMetrics.targetWidth : 0;
+      const widthCandidate = Math.max(computedTargetWidth, scaledBaseWidth) || null;
+      // 限制远程渲染服务的宽度参数，避免请求过大导致失败
+      const MAX_MERMAID_WIDTH = 8192;
+      const width =
+        widthCandidate && Number.isFinite(widthCandidate)
+          ? Math.min(widthCandidate, MAX_MERMAID_WIDTH)
+          : null;
+      width = width * exportScale;
+
+      const url = this.buildMermaidImageUrl(code, {
+        type: options.type || 'png',
+        width
+      });
+      const response = await fetch(url);
+      if (!response.ok) {
+        throw new Error('远程生成 Mermaid 图片失败');
+      }
+      return await response.blob();
+    }
+
     async getSvgMarkupForArtifact(artifact, manifest) {
       if (!artifact) return null;
       if (artifact.type === 'svg') {
@@ -1468,6 +1691,24 @@
       const artifact = state.artifacts[id];
       if (!artifact) return;
 
+      if (artifact.type === 'mermaid') {
+        if (!this.copyClipboardSupported) {
+          alert('当前环境不支持复制图片到剪贴板');
+        } else {
+          try {
+            const blob = await this.fetchMermaidImageBlob(artifact, {
+              type: 'png'
+            });
+            const clipboardItem = new ClipboardItem({ 'image/png': blob });
+            await navigator.clipboard.write([clipboardItem]);
+            alert('图像已复制到剪贴板');
+            return;
+          } catch (error) {
+            console.warn('远程复制 Mermaid 图片失败，改用本地渲染回退:', error);
+          }
+        }
+      }
+
       const svgContent = await this.getSvgMarkupForArtifact(artifact, manifest);
       if (!svgContent) {
         alert('暂不支持复制此类型图表到剪贴板');
@@ -1484,11 +1725,16 @@
 
       image.onload = async () => {
         const canvas = document.createElement('canvas');
-        canvas.width = image.width * this.imageExportScale;
-        canvas.height = image.height * this.imageExportScale;
+        const { targetWidth, targetHeight } = this.computeExportSize(
+          svgContent,
+          image,
+          artifact.type
+        );
+        canvas.width = targetWidth;
+        canvas.height = targetHeight;
         const ctx = canvas.getContext('2d');
-        ctx.setTransform(this.imageExportScale, 0, 0, this.imageExportScale, 0, 0);
-        ctx.drawImage(image, 0, 0);
+        ctx.clearRect(0, 0, targetWidth, targetHeight);
+        ctx.drawImage(image, 0, 0, targetWidth, targetHeight);
 
         const finalize = () => URL.revokeObjectURL(svgUrl);
 
@@ -1524,6 +1770,27 @@
       const artifact = state.artifacts[id];
       if (!artifact) return;
 
+      if (artifact.type === 'mermaid') {
+        try {
+          const blob = await this.fetchMermaidImageBlob(artifact, {
+            type: 'png'
+          });
+          const url = URL.createObjectURL(blob);
+          console.log('url :>> ', url);
+          const link = document.createElement('a');
+          link.href = url;
+          link.download = `${manifest.id}-${Utils.formatDateTime()
+            .replace(/\W/g, '')}.png`;
+          document.body.appendChild(link);
+          link.click();
+          document.body.removeChild(link);
+          URL.revokeObjectURL(url);
+          return;
+        } catch (error) {
+          console.warn('远程导出 Mermaid 图片失败，改用本地渲染回退:', error);
+        }
+      }
+
       const svgContent = await this.getSvgMarkupForArtifact(artifact, manifest);
       if (svgContent) {
         const svgBlob = new Blob([svgContent], {
@@ -1535,15 +1802,20 @@
         image.src = svgUrl;
         image.onload = () => {
           const canvas = document.createElement('canvas');
-          canvas.width = image.width * this.imageExportScale;
-          canvas.height = image.height * this.imageExportScale;
+          const { targetWidth, targetHeight } = this.computeExportSize(
+            svgContent,
+            image,
+            artifact.type
+          );
+          canvas.width = targetWidth;
+          canvas.height = targetHeight;
           const ctx = canvas.getContext('2d');
-          ctx.setTransform(this.imageExportScale, 0, 0, this.imageExportScale, 0, 0);
-          ctx.drawImage(image, 0, 0);
+          ctx.clearRect(0, 0, targetWidth, targetHeight);
+          ctx.drawImage(image, 0, 0, targetWidth, targetHeight);
           const pngUrl = canvas.toDataURL('image/png');
           const link = document.createElement('a');
           link.href = pngUrl;
-          link.download = `${manifest.id}-${Utils.formatDateTime().replace(/\\W/g, '')}.png`;
+          link.download = `${manifest.id}-${Utils.formatDateTime().replace(/\W/g, '')}.png`;
           document.body.appendChild(link);
           link.click();
           document.body.removeChild(link);
@@ -1586,6 +1858,8 @@
       let content = '';
       if (artifact.type === 'svg') {
         content = artifact.content;
+      } else if (artifact.type === 'mermaid') {
+        content = artifact.code || artifact.content || '';
       } else if (artifact.type === 'echarts-option') {
         content = artifact.optionText || JSON.stringify(artifact.option, null, 2);
       }
