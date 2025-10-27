@@ -1220,7 +1220,7 @@
       if (!code.trim()) {
         throw new Error('缺少 Mermaid 代码，无法渲染');
       }
-      const { svg } = await window.mermaid.render(renderId, code);
+      const { svg } = await window.mermaid.render("mermaidSvg", code);
       const updatedArtifact = {
         ...artifact,
         svgContent: svg
