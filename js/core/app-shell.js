@@ -51,6 +51,7 @@
 
       // 对话相关
       this.el.chatInput = document.getElementById('chat-input');
+      this.el.chatQuickActions = document.getElementById('chat-quick-actions');
       this.el.sendButton = document.getElementById('send-button');
       this.el.clearHistoryBtn = document.getElementById('clear-history-btn');
       this.el.chatHistory = document.getElementById('chat-history');
@@ -115,6 +116,20 @@
 
         this.el.chatInput.addEventListener('input', () => {
           Utils.autoResizeTextarea(this.el.chatInput);
+        });
+      }
+
+      if (this.el.chatQuickActions) {
+        this.el.chatQuickActions.addEventListener('click', (event) => {
+          const actionBtn = event.target.closest('[data-quick-value]');
+          if (!actionBtn) return;
+          event.preventDefault();
+          const quickValue = actionBtn.dataset.quickValue || '';
+          if (this.el.chatInput) {
+            this.el.chatInput.value = quickValue;
+            Utils.autoResizeTextarea(this.el.chatInput);
+            this.el.chatInput.focus();
+          }
         });
       }
 
@@ -296,6 +311,7 @@
       if (this.el.chatInput && manifest.chat?.placeholder) {
         this.el.chatInput.placeholder = manifest.chat.placeholder;
       }
+      this.renderQuickActions(manifest.ui?.quickActions || []);
       this.showViewerPlaceholder(manifest.ui?.placeholderText || '');
     }
 
@@ -310,6 +326,26 @@
       `;
       this.el.placeholderText =
         this.el.viewer && this.el.viewer.querySelector('#placeholder-text');
+    }
+
+    renderQuickActions(actions = []) {
+      if (!this.el.chatQuickActions) return;
+      const container = this.el.chatQuickActions;
+      container.innerHTML = '';
+      if (!actions.length) {
+        container.classList.add('hidden');
+        return;
+      }
+      container.classList.remove('hidden');
+      actions.forEach((action) => {
+        const button = document.createElement('button');
+        button.type = 'button';
+        button.className =
+          'quick-action-btn bg-white text-gray-700 px-3 py-1 text-sm border-2 border-black font-semibold hover:bg-gray-100 transition-all duration-200';
+        button.dataset.quickValue = action.value || '';
+        button.textContent = action.label || action.value || '快捷选项';
+        container.appendChild(button);
+      });
     }
 
     getActiveManifest() {

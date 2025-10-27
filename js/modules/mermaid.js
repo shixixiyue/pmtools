@@ -52,7 +52,15 @@
       allowCode: true
     },
     ui: {
-      placeholderText: '生成的 Mermaid 图示将在此处显示'
+      placeholderText: '生成的 Mermaid 图示将在此处显示',
+      quickActions: [
+        { label: '流程图', value: '使用flowchart视图;' },
+        { label: '序列图', value: '使用sequenceDiagram视图;' },
+        { label: '类图', value: '使用classDiagram视图;' },
+        { label: '状态图', value: '使用stateDiagram-v2视图;' },
+        { label: 'ER图', value: '使用erDiagram视图;' },
+        { label: '甘特图', value: '使用gantt视图;' }
+      ]
     }
   });
 })(window);

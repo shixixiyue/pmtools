@@ -72,7 +72,15 @@
       allowCode: true
     },
     ui: {
-      placeholderText: '生成的 ECharts 图表将在此处显示'
+      placeholderText: '生成的 ECharts 图表将在此处显示',
+      quickActions: [
+        { label: '折线图', value: '使用折线图配置;' },
+        { label: '面积图', value: '使用面积图配置;' },
+        { label: '柱状图', value: '使用柱状图配置;' },
+        { label: '条形图', value: '使用条形图配置;' },
+        { label: '饼图', value: '使用饼图配置;' },
+        { label: '雷达图', value: '使用雷达图配置;' }
+      ]
     }
   });
 })(window);
