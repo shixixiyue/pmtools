@@ -1191,7 +1191,8 @@
         );
         this.destroyMermaidPanZoom();
         this.renderSvgMarkup(svgContent, this.activeModuleId, {
-          applyTransform: false
+          applyTransform: false,
+          wrapperClasses: ['svg-content-wrapper--mermaid']
         });
         const svgElement = this.el.viewer.querySelector('svg');
         if (svgElement) {
@@ -1356,10 +1357,21 @@
 
     renderSvgMarkup(svgMarkup, moduleId = this.activeModuleId, options = {}) {
       if (!this.el.viewer || !svgMarkup) return;
-      const { opacity = 1, applyTransform = true } = options;
+      const {
+        opacity = 1,
+        applyTransform = true,
+        wrapperClasses = []
+      } = options;
       this.el.viewer.innerHTML = '';
       const wrapper = document.createElement('div');
       wrapper.className = 'svg-content-wrapper';
+      if (Array.isArray(wrapperClasses)) {
+        wrapperClasses.filter(Boolean).forEach((className) =>
+          wrapper.classList.add(className)
+        );
+      } else if (typeof wrapperClasses === 'string' && wrapperClasses.trim()) {
+        wrapper.classList.add(wrapperClasses.trim());
+      }
       wrapper.innerHTML = svgMarkup;
       wrapper.style.opacity = opacity;
       this.el.viewer.appendChild(wrapper);

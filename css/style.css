@@ -291,6 +291,17 @@ iconify-icon {
   transform-origin: center top;
 }
 
+.svg-content-wrapper--mermaid {
+  flex: 1;
+  margin: 1rem;
+  text-align: center;
+    width: 100%;
+    height: 100%;
+    object-fit: contain;
+    max-width: 100% !important;
+}
+
+
 /* 小手摇摆动画 */
 @keyframes wave {
   0%, 100% {transform: translateX(0px) rotate(90deg);}
@@ -435,4 +446,13 @@ iconify-icon {
 
 #send-button.terminate-mode {
   border-color: #dc2626;
+}
+
+
+
+.flowchart {
+    width: 100%;
+    height: 100%;
+    object-fit: contain;
+    max-width: 100% !important;
 }
