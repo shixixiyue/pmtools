@@ -757,6 +757,14 @@ class ProductCanvasApp {
     `;
   }
 
+  buildDeleteButtonHtml(messageId) {
+    return `
+      <button class="message-delete-btn" title="删除此消息" onclick="event.stopPropagation(); app.confirmDeleteMessage('${messageId}')">
+        <iconify-icon icon="ph:trash-simple-bold"></iconify-icon>
+      </button>
+    `;
+  }
+
   // 组装标准化的SVG消息字符串
   buildSVGMessageContent(beforeText = '', svgBody = '', afterText = '') {
     const segments = [];
@@ -859,6 +867,62 @@ class ProductCanvasApp {
     this.renderSvgViewerForMode();
   }
 
+  confirmDeleteMessage(messageId) {
+    const history = this.conversationHistory[this.currentMode] || [];
+    const targetMessage = history.find(msg => msg.id === messageId);
+    if (!targetMessage) {
+      alert('未找到要删除的消息，请刷新后重试。');
+      return;
+    }
+
+    const typeLabel = targetMessage.type === 'user'
+      ? '这条用户消息'
+      : targetMessage.type === 'ai'
+        ? '这条AI回复'
+        : '这条提示';
+
+    const confirmed = confirm(`${typeLabel}删除后无法恢复，确定要删除吗？`);
+    if (!confirmed) {
+      return;
+    }
+
+    this.deleteMessagePermanently(messageId);
+  }
+
+  deleteMessagePermanently(messageId) {
+    const history = this.conversationHistory[this.currentMode] || [];
+    const messageIndex = history.findIndex(msg => msg.id === messageId);
+    if (messageIndex === -1) {
+      return;
+    }
+
+    history.splice(messageIndex, 1);
+
+    const svgStore = this.svgStorage[this.currentMode] || {};
+    let viewerShouldReset = false;
+    for (const [svgId, meta] of Object.entries(svgStore)) {
+      if (meta.messageId === messageId) {
+        delete svgStore[svgId];
+        if (this.currentSvgId === svgId) {
+          viewerShouldReset = true;
+        }
+      }
+    }
+
+    if (viewerShouldReset) {
+      this.currentSvgId = null;
+      this.showSvgPlaceholder();
+    }
+
+    Utils.storage.set('canvasHistory', this.conversationHistory.canvas || []);
+    Utils.storage.set('swotHistory', this.conversationHistory.swot || []);
+    Utils.storage.set('canvasSVGs', this.svgStorage.canvas || {});
+    Utils.storage.set('swotSVGs', this.svgStorage.swot || {});
+
+    this.renderConversationHistory();
+    this.renderSvgViewerForMode();
+  }
+
   // 添加用户消息
   addUserMessage(text) {
     const messageId = Utils.generateId('msg');
@@ -935,25 +999,33 @@ class ProductCanvasApp {
 
     if (message.type === 'user') {
       messageDiv.className = 'flex justify-end';
+      const deleteButton = this.buildDeleteButtonHtml(message.id);
       messageDiv.innerHTML = `
-        <div class="chat-bubble-user">
-          ${Utils.escapeHtml(message.content)}
+        <div class="chat-bubble-user message-with-delete" data-message-id="${message.id}">
+          <div>${Utils.escapeHtml(message.content)}</div>
+          ${deleteButton}
         </div>
       `;
     } else if (message.type === 'error') {
       messageDiv.className = 'flex justify-start';
+      const deleteButton = this.buildDeleteButtonHtml(message.id);
       messageDiv.innerHTML = `
-        <div class="chat-bubble-ai border-red-500">
-          <iconify-icon icon="ph:warning-circle" class="text-red-500 mr-2"></iconify-icon>
-          ${Utils.escapeHtml(message.content)}
+        <div class="chat-bubble-ai message-with-delete border-red-500" data-message-id="${message.id}">
+          ${deleteButton}
+          <div class="flex items-start gap-2">
+            <iconify-icon icon="ph:warning-circle" class="text-red-500 mt-0.5"></iconify-icon>
+            <span>${Utils.escapeHtml(message.content)}</span>
+          </div>
         </div>
       `;
     } else if (message.type === 'ai') {
       const parsedContent = typeof marked !== 'undefined' ? marked.parse(message.content) : Utils.escapeHtml(message.content);
       const actions = this.buildActionToolbar(message.id, { allowRegenerate, allowRollback });
+      const deleteButton = this.buildDeleteButtonHtml(message.id);
       messageDiv.className = 'flex justify-start';
       messageDiv.innerHTML = `
-        <div class="chat-bubble-ai relative" data-message-id="${message.id}">
+        <div class="chat-bubble-ai relative message-with-delete" data-message-id="${message.id}">
+          ${deleteButton}
           <div class="mb-1">
             ${parsedContent}
           </div>
@@ -972,11 +1044,13 @@ class ProductCanvasApp {
     const beforeHtml = parsed.beforeText ? (typeof marked !== 'undefined' ? marked.parse(parsed.beforeText) : Utils.escapeHtml(parsed.beforeText)) : '';
     const afterHtml = parsed.afterText ? (typeof marked !== 'undefined' ? marked.parse(parsed.afterText) : Utils.escapeHtml(parsed.afterText)) : '';
     const actions = this.buildActionToolbar(message.id, { allowRegenerate, allowRollback });
+    const deleteButton = this.buildDeleteButtonHtml(message.id);
 
     messageDiv.className = 'flex justify-start';
     const placeholderClass = this.currentSvgId === svgId ? 'svg-placeholder-block svg-placeholder-active' : 'svg-placeholder-block';
     messageDiv.innerHTML = `
-      <div class="chat-bubble-ai relative" data-message-id="${message.id}">
+      <div class="chat-bubble-ai relative message-with-delete" data-message-id="${message.id}">
+        ${deleteButton}
         <div>
           ${beforeHtml}
           <div class="${placeholderClass}" data-svg-id="${svgId}" onclick="app.viewSVG('${svgId}')">
