@@ -23,48 +23,45 @@
   </defs>
   
   <!-- 背景 -->
-  <rect fill="#f8f9fa" width="100%" height="100%"/>
+  <rect fill="#f0f4f8" width="100%" height="100%"/>
   
   <!-- 主标题 -->
-  <text x="450" y="35" class="main-title" fill="#28a745">产品精益画布 - 绿邻回收智能终端系统</text>
+  <text x="450" y="35" class="main-title" fill="#007acc">业务中台画布</text>
   
   <!-- Canvas Grid starting at y=60, centered in 900px width -->
   <g transform="translate(75, 60)">
-    <!-- ROW 1 & 2 -->
-    <!-- Box 1: 问题 (rowspan=2) -->
+    <!-- Box 1: 关键业务需求 (rowspan=2) -->
     <g transform="translate(0, 0)">
       <rect width="150" height="300" class="box"/>
-      <rect x="0" y="0" width="150" height="30" fill="#ffebee"/>
+      <rect x="0" y="0" width="150" height="30" fill="#e8f0fe"/>
       <g transform="translate(75, 20)">
-        <text class="title" fill="#c62828">问题</text>
+        <text class="title" fill="#0d47a1">关键业务需求</text>
       </g>
-      <text x="10" y="50" class="content-bold">居民痛点:</text>
-      <text x="10" y="62" class="content">• 卖废品麻烦，需囤积等人</text>
-      <text x="10" y="74" class="content">• 老人操作困难，现有方案不友好</text>
-      <text x="10" y="86" class="content">• 价格不透明，缺乏信任</text>
-      <text x="10" y="108" class="content-bold">商家痛点:</text>
-      <text x="10" y="120" class="content">• 人工成本高，需专人管理</text>
-      <text x="10" y="132" class="content">• 技术门槛高，缺乏智能方案</text>
-      <text x="10" y="154" class="content-bold">现有替代方案局限:</text>
-      <text x="10" y="166" class="content">• 流动回收车时间不固定</text>
-      <text x="10" y="178" class="content">• 人工回收点成本高</text>
+      <text x="10" y="50" class="content-bold">核心需求:</text>
+      <text x="10" y="62" class="content">• 统一数据标准化</text>
+      <text x="10" y="74" class="content">• 业务流程自动化</text>
+      <text x="10" y="86" class="content">• 多系统无缝集成</text>
+      <text x="10" y="108" class="content-bold">痛点:</text>
+      <text x="10" y="120" class="content">• 数据孤岛，信息不通</text>
+      <text x="10" y="132" class="content">• 重复开发，效率低</text>
+      <text x="10" y="154" class="content">• 维护成本高，扩展难</text>
       <text x="130" y="280" class="number">1</text>
     </g>
     
     <!-- Box 4: 解决方案 -->
     <g transform="translate(150, 0)">
       <rect width="150" height="150" class="box"/>
-      <rect x="0" y="0" width="150" height="30" fill="#e3f2fd"/>
+      <rect x="0" y="0" width="150" height="30" fill="#e0f7fa"/>
       <g transform="translate(75, 20)">
-        <text class="title" fill="#1976d2">解决方案</text>
+        <text class="title" fill="#006064">解决方案</text>
       </g>
-      <text x="10" y="50" class="content-bold">智能终端系统:</text>
-      <text x="10" y="62" class="content">• 平板显示二维码供扫描</text>
-      <text x="10" y="74" class="content">• 蓝牙电子秤自动称重</text>
-      <text x="10" y="86" class="content">• 大字体显示金额重量</text>
-      <text x="10" y="108" class="content-bold">多角色管理:</text>
-      <text x="10" y="120" class="content">• 普通用户/管理员/清运员</text>
-      <text x="10" y="132" class="content">• 统一平台，智能分权</text>
+      <text x="10" y="50" class="content-bold">业务中台架构:</text>
+      <text x="10" y="62" class="content">• 标准化服务接口</text>
+      <text x="10" y="74" class="content">• 统一数据模型</text>
+      <text x="10" y="86" class="content">• 模块化业务组件</text>
+      <text x="10" y="108" class="content-bold">技术实现:</text>
+      <text x="10" y="120" class="content">• 微服务架构</text>
+      <text x="10" y="132" class="content">• API网关管理</text>
       <text x="130" y="130" class="number">4</text>
     </g>
     
@@ -73,14 +70,15 @@
       <rect width="150" height="300" class="box"/>
       <rect x="0" y="0" width="150" height="30" fill="#fff3e0"/>
       <g transform="translate(75, 20)">
-        <text class="title" fill="#f57c00">独特卖点</text>
+        <text class="title" fill="#ef6c00">独特卖点</text>
       </g>
-      <text x="10" y="120" class="content-bold">对用户价值:</text>
-      <text x="10" y="132" class="content">• 扫码即用，操作超简单</text>
-      <text x="10" y="144" class="content">• 价格透明，立即到账</text>
-      <text x="10" y="166" class="content-bold">对商家价值:</text>
-      <text x="10" y="178" class="content">• 零人工成本，智能管理</text>
-      <text x="10" y="190" class="content">• 稳定增收，吸引客流</text>
+      <text x="10" y="120" class="content-bold">价值体现:</text>
+      <text x="10" y="132" class="content">• 提高业务响应速度</text>
+      <text x="10" y="144" class="content">• 降低重复开发成本</text>
+      <text x="10" y="156" class="content">• 促进跨部门协作</text>
+      <text x="10" y="178" class="content-bold">竞争优势:</text>
+      <text x="10" y="190" class="content">• 灵活可扩展的架构</text>
+      <text x="10" y="202" class="content">• 易于快速集成新业务</text>
       <text x="130" y="280" class="number">3</text>
     </g>
     
@@ -91,32 +89,32 @@
       <g transform="translate(75, 20)">
         <text class="title" fill="#ad1457">门槛优势</text>
       </g>
-      <text x="10" y="50" class="content-bold">产品壁垒:</text>
-      <text x="10" y="62" class="content">• 老人友好设计(市场空白)</text>
-      <text x="10" y="74" class="content">• 低成本智能化方案</text>
+      <text x="10" y="50" class="content-bold">技术壁垒:</text>
+      <text x="10" y="62" class="content">• 统一中台数据标准</text>
+      <text x="10" y="74" class="content">• 复杂业务模型抽象能力</text>
       <text x="10" y="96" class="content-bold">运营壁垒:</text>
-      <text x="10" y="108" class="content">• 点位网络效应</text>
-      <text x="10" y="120" class="content">• 先发优势抢占资源</text>
+      <text x="10" y="108" class="content">• 多业务系统整合经验</text>
+      <text x="10" y="120" class="content">• 持续迭代优化机制</text>
       <text x="130" y="130" class="number">9</text>
     </g>
     
-    <!-- Box 2: 客户群体分类 (rowspan=2) -->
+    <!-- Box 2: 目标客户 (rowspan=2) -->
     <g transform="translate(600, 0)">
       <rect width="150" height="300" class="box"/>
       <rect x="0" y="0" width="150" height="30" fill="#e8f5e8"/>
       <g transform="translate(75, 20)">
-        <text class="title" fill="#2e7d32">客户群体分类</text>
+        <text class="title" fill="#2e7d32">目标客户</text>
       </g>
-      <text x="10" y="50" class="content-bold">核心用户 (C端):</text>
-      <text x="10" y="62" class="content">• 社区中老年人 (扫码即用)</text>
-      <text x="10" y="74" class="content">• 环保意识强的年轻家庭</text>
-      <text x="10" y="86" class="content">• 图方便的上班族</text>
-      <text x="10" y="108" class="content-bold">合作伙伴 (B端):</text>
-      <text x="10" y="120" class="content">• 社区超市、便利店</text>
-      <text x="10" y="132" class="content">• 快递驿站、物业服务点</text>
-      <text x="10" y="154" class="content-bold">需求特征:</text>
-      <text x="10" y="166" class="content">• 操作简单、零成本增收</text>
-      <text x="10" y="178" class="content">• 智能化管理、吸引客流</text>
+      <text x="10" y="50" class="content-bold">内部客户:</text>
+      <text x="10" y="62" class="content">• 业务部门需求方</text>
+      <text x="10" y="74" class="content">• IT开发团队</text>
+      <text x="10" y="86" class="content">• 数据分析团队</text>
+      <text x="10" y="108" class="content-bold">外部客户:</text>
+      <text x="10" y="120" class="content">• 合作伙伴系统</text>
+      <text x="10" y="132" class="content">• 第三方服务平台</text>
+      <text x="10" y="154" class="content-bold">需求特点:</text>
+      <text x="10" y="166" class="content">• 灵活定制服务</text>
+      <text x="10" y="178" class="content">• 高可用稳定性</text>
       <text x="130" y="280" class="number">2</text>
     </g>
     
@@ -128,12 +126,12 @@
       <g transform="translate(75, 20)">
         <text class="title" fill="#00695c">关键指标</text>
       </g>
-      <text x="10" y="50" class="content-bold">运营指标:</text>
-      <text x="10" y="62" class="content">• 单终端日均交易量</text>
-      <text x="10" y="74" class="content">• 终端网络覆盖社区数</text>
-      <text x="10" y="96" class="content-bold">用户指标:</text>
-      <text x="10" y="108" class="content">• 操作成功率、用户满意度</text>
-      <text x="10" y="120" class="content">• 用户复购率、推荐率</text>
+      <text x="10" y="50" class="content-bold">性能指标:</text>
+      <text x="10" y="62" class="content">• 接口响应时间</text>
+      <text x="10" y="74" class="content">• 系统可用率</text>
+      <text x="10" y="96" class="content-bold">业务指标:</text>
+      <text x="10" y="108" class="content">• 业务组件复用率</text>
+      <text x="10" y="120" class="content">• 需求响应周期</text>
       <text x="130" y="130" class="number">8</text>
     </g>
     
@@ -144,12 +142,12 @@
       <g transform="translate(75, 20)">
         <text class="title" fill="#7b1fa2">渠道</text>
       </g>
-      <text x="10" y="50" class="content-bold">线下布点:</text>
-      <text x="10" y="62" class="content">• 社区超市、快递站合作</text>
-      <text x="10" y="74" class="content">• 与物业/居委会合作</text>
-      <text x="10" y="96" class="content-bold">用户触达:</text>
-      <text x="10" y="108" class="content">• 微信生态扫一扫直达</text>
-      <text x="10" y="120" class="content">• 业主群推广分享</text>
+      <text x="10" y="50" class="content-bold">内部推广:</text>
+      <text x="10" y="62" class="content">• 跨部门沟通会议</text>
+      <text x="10" y="74" class="content">• 内部培训与宣讲</text>
+      <text x="10" y="96" class="content-bold">技术支持:</text>
+      <text x="10" y="108" class="content">• 开发者门户</text>
+      <text x="10" y="120" class="content">• 技术文档和示例</text>
       <text x="130" y="130" class="number">5</text>
     </g>
     
@@ -161,12 +159,13 @@
       <g transform="translate(187.5, 20)">
         <text class="title" fill="#f57f17">成本分析</text>
       </g>
-      <text x="10" y="50" class="content-bold">单点成本:</text>
-      <text x="10" y="62" class="content">• 硬件成本: 1000元/终端 • 部署成本: 2000元/点</text>
-      <text x="10" y="84" class="content-bold">运营成本:</text>
-      <text x="10" y="96" class="content">• 技术维护、云服务 • 清运物流、客服支持</text>
-      <text x="10" y="118" class="content-bold">分成成本:</text>
-      <text x="10" y="130" class="content">• 与场地方交易额分账</text>
+      <text x="10" y="50" class="content-bold">建设成本:</text>
+      <text x="10" y="62" class="content">• 中台架构设计与开发</text>
+      <text x="10" y="74" class="content">• 统一数据平台建设</text>
+      <text x="10" y="96" class="content-bold">运营成本:</text>
+      <text x="10" y="108" class="content">• 服务器及云资源</text>
+      <text x="10" y="120" class="content">• 技术支持团队</text>
+      <text x="10" y="132" class="content">• 持续维护与升级</text>
       <text x="355" y="130" class="number">7</text>
     </g>
     
@@ -177,12 +176,13 @@
       <g transform="translate(187.5, 20)">
         <text class="title" fill="#2e7d32">收入分析</text>
       </g>
-      <text x="10" y="50" class="content-bold">主要收入流:</text>
-      <text x="10" y="62" class="content">• 废品回收差价 (终端回收价 vs 批发销售价的差额) - 核心收入</text>
-      <text x="10" y="74" class="content">• 与合作场地按交易量分成 - 激励合作</text>
-      <text x="10" y="96" class="content-bold">增值收入流:</text>
-      <text x="10" y="108" class="content">• 规模化后的数据服务收入 • 绿色积分商城佣金</text>
-      <text x="10" y="130" class="content">• 单点投入3000元，预期4-10个月回本</text>
+      <text x="10" y="50" class="content-bold">成本节约:</text>
+      <text x="10" y="62" class="content">• 复用业务组件减少开发</text>
+      <text x="10" y="74" class="content">• 降低维护及切换成本</text>
+      <text x="10" y="96" class="content-bold">业务增长:</text>
+      <text x="10" y="108" class="content">• 快速支持新业务上线</text>
+      <text x="10" y="120" class="content">• 提升客户满意度与留存</text>
+      <text x="10" y="132" class="content">• 促进多业务协同增效</text>
       <text x="355" y="130" class="number">6</text>
     </g>
   </g>

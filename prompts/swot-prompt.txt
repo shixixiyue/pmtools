@@ -49,11 +49,11 @@ SWOT分析应包含以下四个维度：
   <!-- 背景 -->
   <rect fill="#f8f9fa" width="100%" height="100%"/>
   <!-- 主标题 -->
-  <text x="450" y="40" class="main-title" fill="#2c3e50">SWOT战略分析模板</text>
+  <text x="450" y="40" class="main-title" fill="#2c3e50">业务中台SWOT分析</text>
   <!-- 副标题 -->
-  <text x="200" y="60" class="subtitle" text-anchor="middle">Strengths 优势 | Weaknesses 劣势 | Opportunities 机会 | Threats 威胁</text>
+  <text x="450" y="70" class="subtitle" text-anchor="middle">Strengths 优势 | Weaknesses 劣势 | Opportunities 机会 | Threats 威胁</text>
   <!-- SWOT Grid -->
-  <g transform="translate(50, 90)">
+  <g transform="translate(50, 110)">
     <!-- S: Strengths (左上) -->
     <g transform="translate(0, 0)">
       <rect width="380" height="220" class="box"/>
@@ -61,15 +61,15 @@ SWOT分析应包含以下四个维度：
       <g transform="translate(190, 25)">
         <text class="swot-title" fill="#155724">S - 内部优势 (Strengths)</text>
       </g>
-      <text x="20" y="60" class="content-bold">核心能力:</text>
-      <text x="20" y="78" class="content">• 技术优势、专利技术、专业团队</text>
-      <text x="20" y="96" class="content">• 品牌声誉、客户忠诚度</text>
-      <text x="20" y="114" class="content-bold">资源优势:</text>
-      <text x="20" y="132" class="content">• 资金实力、供应链优势</text>
-      <text x="20" y="150" class="content">• 渠道资源、合作伙伴关系</text>
-      <text x="20" y="168" class="content-bold">运营优势:</text>
-      <text x="20" y="186" class="content">• 成本控制、效率优势</text>
-      <text x="20" y="204" class="content">• 组织文化、创新能力</text>
+      <text x="20" y="60" class="content-bold">核心竞争力:</text>
+      <text x="20" y="78" class="content">• 统一数据与业务模型，提升复用效率</text>
+      <text x="20" y="96" class="content">• 强大的技术架构支持，高可扩展性</text>
+      <text x="20" y="114" class="content-bold">技术优势:</text>
+      <text x="20" y="132" class="content">• 微服务架构与API治理</text>
+      <text x="20" y="150" class="content">• 自动化运维与持续集成能力</text>
+      <text x="20" y="168" class="content-bold">团队能力:</text>
+      <text x="20" y="186" class="content">• 具备多领域业务经验的复合型团队</text>
+      <text x="20" y="204" class="content">• 高效的跨部门协作机制</text>
       <text x="350" y="200" class="number" font-size="36">S</text>
     </g>
     <!-- W: Weaknesses (右上) -->
@@ -79,15 +79,15 @@ SWOT分析应包含以下四个维度：
       <g transform="translate(190, 25)">
         <text class="swot-title" fill="#721c24">W - 内部劣势 (Weaknesses)</text>
       </g>
-      <text x="20" y="60" class="content-bold">资源局限:</text>
-      <text x="20" y="78" class="content">• 资金短缺、人才缺失</text>
-      <text x="20" y="96" class="content">• 技术短板、设备落后</text>
-      <text x="20" y="114" class="content-bold">运营问题:</text>
-      <text x="20" y="132" class="content">• 管理混乱、流程不完善</text>
-      <text x="20" y="150" class="content">• 成本过高、效率低下</text>
-      <text x="20" y="168" class="content-bold">市场劣势:</text>
-      <text x="20" y="186" class="content">• 品牌知名度低、客户基础薄弱</text>
-      <text x="20" y="204" class="content">• 产品竞争力不足、市场份额小</text>
+      <text x="20" y="60" class="content-bold">资源限制:</text>
+      <text x="20" y="78" class="content">• 初期投入高，资金压力大</text>
+      <text x="20" y="96" class="content">• 部分遗留系统难以整合</text>
+      <text x="20" y="114" class="content-bold">技术短板:</text>
+      <text x="20" y="132" class="content">• 技术复杂度高，学习曲线陡峭</text>
+      <text x="20" y="150" class="content">• 数据治理和质量控制不足</text>
+      <text x="20" y="168" class="content-bold">运营问题:</text>
+      <text x="20" y="186" class="content">• 业务需求快速变化导致中台迭代压力大</text>
+      <text x="20" y="204" class="content">• 部分部门对中台依赖和理解不足</text>
       <text x="350" y="200" class="number" font-size="36">W</text>
     </g>
     <!-- O: Opportunities (左下) -->
@@ -97,15 +97,15 @@ SWOT分析应包含以下四个维度：
       <g transform="translate(190, 25)">
         <text class="swot-title" fill="#0c5460">O - 外部机会 (Opportunities)</text>
       </g>
-      <text x="20" y="60" class="content-bold">市场机会:</text>
-      <text x="20" y="78" class="content">• 新兴市场增长、政策扶持</text>
-      <text x="20" y="96" class="content">• 消费趋势变化、需求增长</text>
-      <text x="20" y="114" class="content-bold">技术机会:</text>
-      <text x="20" y="132" class="content">• 新技术应用、数字化转型</text>
-      <text x="20" y="150" class="content">• 产业链升级、技术合作</text>
-      <text x="20" y="168" class="content-bold">合作机会:</text>
-      <text x="20" y="186" class="content">• 战略联盟、并购机会</text>
-      <text x="20" y="204" class="content">• 国际化扩张、跨界合作</text>
+      <text x="20" y="60" class="content-bold">市场趋势:</text>
+      <text x="20" y="78" class="content">• 数字化转型加速，企业对中台需求增加</text>
+      <text x="20" y="96" class="content">• 多行业中台解决方案兴起，市场空间广阔</text>
+      <text x="20" y="114" class="content-bold">政策支持:</text>
+      <text x="20" y="132" class="content">• 政府支持信息化建设和智能制造</text>
+      <text x="20" y="150" class="content">• 数据安全与合规政策促进规范化建设</text>
+      <text x="20" y="168" class="content-bold">技术发展:</text>
+      <text x="20" y="186" class="content">• 云计算、大数据、AI等技术助力中台升级</text>
+      <text x="20" y="204" class="content">• 跨界合作和生态圈共建带来新机遇</text>
       <text x="350" y="200" class="number" font-size="36">O</text>
     </g>
     <!-- T: Threats (右下) -->
@@ -115,15 +115,15 @@ SWOT分析应包含以下四个维度：
       <g transform="translate(190, 25)">
         <text class="swot-title" fill="#856404">T - 外部威胁 (Threats)</text>
       </g>
-      <text x="20" y="60" class="content-bold">竞争威胁:</text>
-      <text x="20" y="78" class="content">• 新进入者、替代产品</text>
-      <text x="20" y="96" class="content">• 价格战、市场份额争夺</text>
-      <text x="20" y="114" class="content-bold">环境威胁:</text>
-      <text x="20" y="132" class="content">• 经济下行、政策变化</text>
-      <text x="20" y="150" class="content">• 供应链风险、原材料涨价</text>
-      <text x="20" y="168" class="content-bold">其他威胁:</text>
-      <text x="20" y="186" class="content">• 技术变革冲击、消费者偏好变化</text>
-      <text x="20" y="204" class="content">• 法律法规风险、地缘政治影响</text>
+      <text x="20" y="60" class="content-bold">竞争压力:</text>
+      <text x="20" y="78" class="content">• 同行业中台方案竞争激烈</text>
+      <text x="20" y="96" class="content">• 新兴技术和替代方案快速涌现</text>
+      <text x="20" y="114" class="content-bold">市场风险:</text>
+      <text x="20" y="132" class="content">• 业务需求多变，忽视中台价值可能受限</text>
+      <text x="20" y="150" class="content">• 投资回报周期较长，影响持续投入</text>
+      <text x="20" y="168" class="content-bold">技术颠覆:</text>
+      <text x="20" y="186" class="content">• 新技术架构可能替代现有中台架构</text>
+      <text x="20" y="204" class="content">• 数据安全及隐私风险带来的法律挑战</text>
       <text x="350" y="200" class="number" font-size="36">T</text>
     </g>
     <!-- 中心线  -->

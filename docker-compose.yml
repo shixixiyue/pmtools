@@ -1,0 +1,9 @@
+version: '3.8'
+
+services:
+  product-canvas:
+    image: 935732994/pmtools
+    ports:
+      - "3000:3000"
+    container_name: product-canvas-app
+    restart: unless-stopped

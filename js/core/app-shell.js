@@ -2066,7 +2066,7 @@
       }
       this.apiClient.saveConfig(config);
       this.setConfigStatus('success', '配置已保存');
-      setTimeout(() => this.closeConfigModal(), 600);
+      //setTimeout(() => this.closeConfigModal(), 600);
     }
 
     setConfigStatus(type, message) {
