@@ -9,12 +9,22 @@ class APIClient {
       key: '',
       model: ''
     };
-    this.prompts = {
-      canvas: '',
-      swot: ''
+    this.promptMap = {};
+    this.promptFiles = {
+      canvas: 'prompts/canvas-prompt.txt',
+      swot: 'prompts/swot-prompt.txt',
+      echarts: 'prompts/echarts-prompt.txt'
+    };
+    this.promptFallbacks = {
+      canvas: '你是一个专业的产品战略分析师，擅长创建产品画布。',
+      swot: '你是一个专业的商业战略分析师，擅长进行SWOT分析。',
+      echarts:
+        '你是一个资深的数据可视化专家，精通将自然语言需求转化为 ECharts 配置对象，请输出结构化 JSON option。',
+      default:
+        '你是一个可靠的智能助手，请直接回答用户的问题并提供结构化输出。'
     };
     this.loadConfig();
-    this.loadPrompts();
+    this.preloadPrompts(Object.keys(this.promptFiles));
   }
 
   // 加载API配置
@@ -25,21 +35,45 @@ class APIClient {
     }
   }
 
-  // 加载系统提示词
-  async loadPrompts() {
+  preloadPrompts(keys = []) {
+    keys.forEach((key) => {
+      this.ensurePrompt(key).catch((error) =>
+        console.warn(`预加载提示词 ${key} 失败:`, error)
+      );
+    });
+  }
+
+  async ensurePrompt(promptKey) {
+    if (!promptKey) return '';
+    if (this.promptMap[promptKey]) {
+      return this.promptMap[promptKey];
+    }
+    const prompt = await this.fetchPrompt(promptKey);
+    this.promptMap[promptKey] = prompt;
+    return prompt;
+  }
+
+  async fetchPrompt(promptKey) {
+    const filePath = this.promptFiles[promptKey];
+    const fallback =
+      this.promptFallbacks[promptKey] ||
+      '你是一个可靠的智能助手，请直接回答用户问题。';
+
+    if (!filePath) {
+      console.warn(`未找到提示词 ${promptKey} 对应的文件配置`);
+      return fallback;
+    }
+
     try {
-      // 加载产品画布提示词
-      const canvasResponse = await fetch('prompts/canvas-prompt.txt');
-      this.prompts.canvas = await canvasResponse.text();
-      
-      // 加载SWOT分析提示词
-      const swotResponse = await fetch('prompts/swot-prompt.txt');
-      this.prompts.swot = await swotResponse.text();
+      const response = await fetch(filePath);
+      if (!response.ok) {
+        throw new Error(`HTTP ${response.status}`);
+      }
+      const text = await response.text();
+      return text.trim() || fallback;
     } catch (error) {
-      console.error('加载提示词失败:', error);
-      // 使用默认提示词
-      this.prompts.canvas = '你是一个专业的产品战略分析师，擅长创建产品画布。';
-      this.prompts.swot = '你是一个专业的商业战略分析师，擅长进行SWOT分析。';
+      console.warn(`加载提示词 ${promptKey} 失败:`, error);
+      return fallback;
     }
   }
 
@@ -74,6 +108,49 @@ class APIClient {
     } catch (error) {
       throw new Error(`连接测试失败: ${error.message}`);
     }
+  }
+
+  async buildMessagesForModule(manifest, userMessage, contextMessages = []) {
+    const prompt =
+      (manifest && manifest.promptKey
+        ? await this.ensurePrompt(manifest.promptKey)
+        : null) || this.promptFallbacks.default;
+
+    return [
+      { role: 'system', content: prompt },
+      ...contextMessages,
+      { role: 'user', content: userMessage }
+    ];
+  }
+
+  async generateModuleCompletion(
+    manifest,
+    userMessage,
+    contextMessages = [],
+    options = {}
+  ) {
+    const messages = await this.buildMessagesForModule(
+      manifest,
+      userMessage,
+      contextMessages
+    );
+    return this.sendChatMessage(messages, options);
+  }
+
+  async generateModuleStream(
+    manifest,
+    userMessage,
+    contextMessages = [],
+    onChunk,
+    onComplete,
+    options = {}
+  ) {
+    const messages = await this.buildMessagesForModule(
+      manifest,
+      userMessage,
+      contextMessages
+    );
+    return this.sendChatMessageStream(messages, options, onChunk, onComplete);
   }
 
   // 发送聊天请求
@@ -127,46 +204,46 @@ class APIClient {
 
   // 生成产品画布的专用方法
   async generateProductCanvas(userRequest, context = []) {
-    const messages = [
-      { role: 'system', content: this.prompts.canvas },
-      ...context,
-      { role: 'user', content: userRequest }
-    ];
-
-    return await this.sendChatMessage(messages, { maxTokens: 18000 });
+    return this.generateModuleCompletion(
+      { promptKey: 'canvas' },
+      userRequest,
+      context,
+      { maxTokens: 18000 }
+    );
   }
 
   // 生成SWOT分析的专用方法
   async generateSWOTAnalysis(userRequest, context = []) {
-    const messages = [
-      { role: 'system', content: this.prompts.swot },
-      ...context,
-      { role: 'user', content: userRequest }
-    ];
-
-    return await this.sendChatMessage(messages, { maxTokens: 18000 });
+    return this.generateModuleCompletion(
+      { promptKey: 'swot' },
+      userRequest,
+      context,
+      { maxTokens: 18000 }
+    );
   }
 
   // 流式生成产品画布
   async generateProductCanvasStream(userRequest, context = [], onChunk, onComplete) {
-    const messages = [
-      { role: 'system', content: this.prompts.canvas },
-      ...context,
-      { role: 'user', content: userRequest }
-    ];
-
-    return this.sendChatMessageStream(messages, { maxTokens: 13000 }, onChunk, onComplete);
+    return this.generateModuleStream(
+      { promptKey: 'canvas' },
+      userRequest,
+      context,
+      onChunk,
+      onComplete,
+      { maxTokens: 13000 }
+    );
   }
 
   // 流式生成SWOT分析
   async generateSWOTAnalysisStream(userRequest, context = [], onChunk, onComplete) {
-    const messages = [
-      { role: 'system', content: this.prompts.swot },
-      ...context,
-      { role: 'user', content: userRequest }
-    ];
-
-    return this.sendChatMessageStream(messages, { maxTokens: 13000 }, onChunk, onComplete);
+    return this.generateModuleStream(
+      { promptKey: 'swot' },
+      userRequest,
+      context,
+      onChunk,
+      onComplete,
+      { maxTokens: 13000 }
+    );
   }
 
   // 流式发送聊天请求
@@ -233,7 +310,8 @@ class APIClient {
       throw new Error('没有找到用户消息');
     }
 
-    const mode = Utils.storage.get('currentMode', 'canvas');
+    const activeModuleId = Utils.storage.get('tool-engine:activeModuleId', 'product-canvas');
+    const mode = activeModuleId === 'swot' ? 'swot' : 'canvas';
     
     if (mode === 'canvas') {
       return await this.generateProductCanvas(lastUserMessage.content, contextMessages.slice(0, -1));

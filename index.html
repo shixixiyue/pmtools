@@ -29,17 +29,9 @@
           <iconify-icon icon="ph:gear-six-fill" class="text-2xl"></iconify-icon>
         </button>
         
-        <span class="text-white font-bold text-sm">点击切换模式</span>
+        <span class="text-white font-bold text-sm">点击切换模块</span>
         <iconify-icon icon="ph:hand-pointing-fill" class="text-2xl text-yellow-300 wave-hand"></iconify-icon>
-        
-        <button id="canvas-mode-btn" class="mode-btn-active bg-white text-orange-600 px-4 py-2 font-bold border-2 border-black hover:bg-orange-50 transition-all duration-200">
-          <iconify-icon icon="ph:pen-nib-duotone" class="align-middle mr-1"></iconify-icon>
-          产品画布
-        </button>
-        <button id="swot-mode-btn" class="mode-btn-inactive bg-white text-purple-600 px-4 py-2 font-bold border-2 border-black hover:bg-purple-50 transition-all duration-200">
-          <iconify-icon icon="ph:chart-bar-duotone" class="align-middle mr-1"></iconify-icon>
-          SWOT分析
-        </button>
+        <div id="module-button-group" class="flex items-center gap-2"></div>
       </div>
     </header>
 
@@ -206,6 +198,15 @@
 
     <!-- 引入JavaScript文件 -->
     <script src="js/utils.js"></script>
+    <script src="js/services/storage-service.js"></script>
+    <script src="js/services/conversation-service.js"></script>
+    <script src="js/core/module-registry.js"></script>
+    <script src="js/modules/product-canvas.js"></script>
+    <script src="js/modules/swot.js"></script>
+    <script src="js/modules/echarts.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/echarts@5/dist/echarts.min.js"></script>
+    <script src="js/core/module-runtime.js"></script>
+    <script src="js/core/app-shell.js"></script>
     <script src="js/apiclient.js"></script>
     <script src="js/app.js"></script>
 </body>
