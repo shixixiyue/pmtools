@@ -26,6 +26,8 @@ class ProductCanvasApp {
     this.pendingSvgId = null;
     this.pendingCancel = false;
     this.copyClipboardSupported = typeof ClipboardItem !== 'undefined' && !!navigator.clipboard;
+    const deviceScale = typeof window !== 'undefined' ? (window.devicePixelRatio || 1) : 1;
+    this.imageExportScale = Math.min(4, Math.max(2, deviceScale));
     
     this.initElements();
     this.initEventListeners();
@@ -1214,7 +1216,7 @@ class ProductCanvasApp {
     });
   }
 
-  async convertSvgToPngBlob(svgContent) {
+  async convertSvgToPngBlob(svgContent, options = {}) {
     const { width, height } = this.parseSvgDimensions(svgContent);
     const svgBlob = new Blob([svgContent], { type: 'image/svg+xml' });
     const url = URL.createObjectURL(svgBlob);
@@ -1222,14 +1224,16 @@ class ProductCanvasApp {
     try {
       const img = await this.loadImageFromUrl(url);
       const canvas = document.createElement('canvas');
-      const canvasWidth = Math.max(1, img.naturalWidth || width || 1024);
-      const canvasHeight = Math.max(1, img.naturalHeight || height || 768);
-      canvas.width = canvasWidth;
-      canvas.height = canvasHeight;
+      const baseWidth = Math.max(1, img.naturalWidth || width || 1024);
+      const baseHeight = Math.max(1, img.naturalHeight || height || 768);
+      const preferredScale = options.scale || this.imageExportScale || 1;
+      const exportScale = Math.min(4, Math.max(1, preferredScale));
+      canvas.width = Math.round(baseWidth * exportScale);
+      canvas.height = Math.round(baseHeight * exportScale);
 
       const ctx = canvas.getContext('2d');
-      ctx.clearRect(0, 0, canvasWidth, canvasHeight);
-      ctx.drawImage(img, 0, 0, canvasWidth, canvasHeight);
+      ctx.clearRect(0, 0, canvas.width, canvas.height);
+      ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
 
       return await new Promise((resolve, reject) => {
         canvas.toBlob((blob) => {

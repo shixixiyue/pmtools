@@ -25,6 +25,7 @@
       <div class="flex items-center gap-3">
         <!-- API配置按钮 -->
         <button id="settings-btn" class="settings-btn bg-white/20 text-white p-2 border-2 border-white hover:bg-white/30 transition-all" title="API配置">
+          API配置
           <iconify-icon icon="ph:gear-six-fill" class="text-2xl"></iconify-icon>
         </button>
         
@@ -43,10 +44,10 @@
     </header>
 
     <!-- 主内容区 -->
-    <main class="flex-1 grid grid-cols-1 md:grid-cols-3 gap-4 p-4 overflow-hidden">
+    <main class="flex-1 min-h-0 grid grid-cols-1 md:grid-cols-3 gap-4 p-4 overflow-hidden">
     
       <!-- 左侧对话面板 -->
-      <div class="md:col-span-1 bg-white wild-border border-cyan-500 flex flex-col">
+      <div class="md:col-span-1 bg-white wild-border border-cyan-500 flex flex-col min-h-0">
         <!-- 对话历史顶部栏 -->
         <div class="p-3 border-b-3 border-gray-300 bg-gradient-to-r from-cyan-500 to-blue-500 flex items-center justify-between">
           <div class="flex items-center gap-2">
@@ -85,7 +86,7 @@
       </div>
     
       <!-- 右侧显示面板 -->
-      <div class="md:col-span-2 bg-white wild-border border-purple-600 flex flex-col">
+      <div class="md:col-span-2 bg-white wild-border border-purple-600 flex flex-col min-h-0">
         <div id="svg-viewer" class="flex-1 flex items-center justify-center p-4 bg-gradient-to-br from-purple-50 to-pink-50 overflow-auto">
           <div id="svg-placeholder" class="text-center text-gray-400">
             <iconify-icon icon="ph:image-square" class="text-6xl mx-auto text-purple-400"></iconify-icon>
