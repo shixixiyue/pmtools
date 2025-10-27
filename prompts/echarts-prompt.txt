@@ -5,3 +5,83 @@
 3. 如需附加解读或说明，请放在 JSON 代码块之外。
 4. 如果用户没有提供数据，请生成结构清晰的示例数据并说明需要用户替换的位置。
 5. 鼓励使用易读的调色板、标题和提示信息，兼顾桌面端展示。
+6. 根据用户需求选择合适的图表类型和样式
+7. 包含丰富的交互效果和美观的样式
+
+可以参照以下JSON格式返回：
+
+{
+    "title": {
+        "text": "图表标题",
+        "subtext": "副标题（可选）",
+        "left": "center",
+        "textStyle": {
+            "color": "#333",
+            "fontWeight": "bold",
+            "fontSize": 18
+        }
+    },
+    "tooltip": {
+        "trigger": "axis",
+        "axisPointer": {
+            "type": "cross",
+            "crossStyle": {
+                "color": "#999"
+            }
+        },
+        "backgroundColor": "rgba(255,255,255,0.9)",
+        "borderColor": "#ccc",
+        "borderWidth": 1
+    },
+    "legend": {
+        "show": true,
+        "data": ["系列名称"],
+        "top": "bottom",
+        "padding": [20, 10, 10, 10]
+    },
+    "toolbox": {
+        "feature": {
+            "dataView": { "show": true, "readOnly": false, "title": "数据视图" },
+            "magicType": { "show": true, "type": ["line", "bar"], "title": {"line": "切换为折线图", "bar": "切换为柱状图"} },
+            "restore": { "show": true, "title": "还原" },
+            "saveAsImage": { "show": true, "title": "保存为图片" }
+        },
+        "right": 20
+    },
+    "grid": {
+        "left": "3%",
+        "right": "4%",
+        "bottom": "12%",
+        "containLabel": true
+    },
+    "xAxis": {
+        "type": "category",
+        "data": ["实际的X轴数据数组"],
+        "name": "X轴名称",
+        "axisLabel": {
+            "color": "#666"
+        }
+    },
+    "yAxis": {
+        "type": "value",
+        "name": "Y轴名称",
+        "axisLabel": {
+            "color": "#666"
+        }
+    },
+    "series": [
+        {
+            "name": "系列名称",
+            "type": "bar",
+            "data": ["实际的Y轴数据数组"],
+            "itemStyle": {
+                "color": "#3498db",
+                "borderRadius": [4, 4, 0, 0]
+            },
+            "emphasis": {
+                "focus": "series"
+            }
+        }
+    ],
+    "color": ["#3498db", "#e74c3c", "#2ecc71", "#f39c12", "#9b59b6"]
+}

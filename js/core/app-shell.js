@@ -176,6 +176,17 @@
       if (this.el.saveConfigBtn) {
         this.el.saveConfigBtn.addEventListener('click', () => this.saveAPI());
       }
+
+      if (this.el.chatHistory) {
+        this.el.chatHistory.addEventListener('click', (event) => {
+          const actionBtn = event.target.closest('[data-action]');
+          if (!actionBtn) return;
+          event.preventDefault();
+          const action = actionBtn.dataset.action;
+          const messageId = actionBtn.dataset.messageId;
+          this.handleMessageAction(action, messageId);
+        });
+      }
     }
 
     setupModuleSwitcher() {
@@ -297,22 +308,38 @@
         return;
       }
 
+      let lastAiMessageId = null;
+      for (let i = history.length - 1; i >= 0; i -= 1) {
+        if (history[i].type === 'ai') {
+          lastAiMessageId = history[i].id;
+          break;
+        }
+      }
+
       history.forEach((message) => {
-        const bubble = this.buildMessageBubble(message);
+        const bubble = this.buildMessageBubble(message, {
+          allowRollback: message.type === 'ai',
+          allowRegenerate:
+            message.type === 'ai' && message.id === lastAiMessageId,
+          allowDelete: true
+        });
         this.el.chatHistory.appendChild(bubble);
       });
 
+      this.highlightActivePlaceholder();
       Utils.scrollToBottom(this.el.chatHistory);
     }
 
-    buildMessageBubble(message) {
+    buildMessageBubble(message, options = {}) {
       const wrapper = document.createElement('div');
       const manifest = this.getActiveManifest();
+      const actionsHtml = this.buildMessageActions(message, options);
       if (message.type === 'user') {
         wrapper.className = 'flex justify-end';
         wrapper.innerHTML = `
           <div class="chat-bubble-user message-with-delete" data-message-id="${message.id}">
             <div>${Utils.escapeHtml(message.content)}</div>
+            ${actionsHtml}
           </div>
         `;
       } else if (message.type === 'error') {
@@ -323,6 +350,7 @@
               <iconify-icon icon="ph:warning-circle" class="text-red-500 mt-0.5"></iconify-icon>
               <span>${Utils.escapeHtml(message.content)}</span>
             </div>
+            ${actionsHtml}
           </div>
         `;
       } else {
@@ -331,15 +359,17 @@
           typeof marked !== 'undefined'
             ? marked.parse(message.content)
             : Utils.escapeHtml(message.content);
+        const artifactLabel = manifest.label || '图表';
         const artifactHtml = message.artifactId
           ? `<div class="svg-placeholder-block" data-artifact-id="${message.artifactId}" data-module-id="${manifest.id}">
-              📊 点击查看最新图表
+              📊 点击查看${artifactLabel}
             </div>`
           : '';
         wrapper.innerHTML = `
           <div class="chat-bubble-ai message-with-delete" data-message-id="${message.id}">
             <div class="message-body">${parsedContent}</div>
             ${artifactHtml}
+            ${actionsHtml}
           </div>
         `;
         if (message.artifactId) {
@@ -350,6 +380,240 @@
         }
       }
       return wrapper;
+    }
+
+    buildMessageActions(message, options = {}) {
+      const {
+        allowRollback = false,
+        allowRegenerate = false,
+        allowDelete = true
+      } = options;
+
+      const actions = [];
+
+      if (allowRollback) {
+        actions.push(`
+          <button class="bubble-action-btn flex items-center gap-1 text-xs text-gray-600 hover:text-blue-600 transition-colors"
+            data-action="rollback-message" data-message-id="${message.id}">
+            <iconify-icon icon="ph:arrow-u-up-left-bold"></iconify-icon>
+            <span>退回</span>
+          </button>
+        `);
+      }
+
+      if (allowRegenerate) {
+        actions.push(`
+          <button class="bubble-action-btn flex items-center gap-1 text-xs text-gray-600 hover:text-green-600 transition-colors"
+            data-action="regenerate-message" data-message-id="${message.id}">
+            <iconify-icon icon="ph:arrow-clockwise-bold"></iconify-icon>
+            <span>重新生成</span>
+          </button>
+        `);
+      }
+
+      if (allowDelete) {
+        actions.push(`
+          <button class="bubble-action-btn flex items-center gap-1 text-xs text-gray-600 hover:text-red-600 transition-colors"
+            data-action="delete-message" data-message-id="${message.id}">
+            <iconify-icon icon="ph:trash-simple-bold"></iconify-icon>
+            <span>删除</span>
+          </button>
+        `);
+      }
+
+      if (!actions.length) {
+        return '';
+      }
+
+      return `
+        <div class="message-actions flex gap-2 mt-2 pt-2 border-t border-gray-200">
+          ${actions.join('')}
+        </div>
+      `;
+    }
+
+    handleMessageAction(action, messageId) {
+      if (!action || !messageId) return;
+      switch (action) {
+        case 'delete-message':
+          this.deleteMessage(messageId);
+          break;
+        case 'rollback-message':
+          this.rollbackMessage(messageId);
+          break;
+        case 'regenerate-message':
+          this.regenerateMessage(messageId);
+          break;
+        default:
+          break;
+      }
+    }
+
+    deleteMessage(messageId) {
+      const manifest = this.getActiveManifest();
+      const history = this.conversationService.getHistory(manifest);
+      const index = history.findIndex((msg) => msg.id === messageId);
+      if (index === -1) {
+        alert('未找到要删除的消息，请重试。');
+        return;
+      }
+
+      const target = history[index];
+      const typeLabel =
+        target.type === 'user'
+          ? '这条用户消息'
+          : target.type === 'ai'
+            ? '这条AI回复'
+            : '这条提示';
+      if (
+        !confirm(
+          `${typeLabel}删除后无法恢复，确定要删除吗？`
+        )
+      ) {
+        return;
+      }
+
+      const removed = history.splice(index, 1);
+      this.conversationService.saveHistory(manifest, history);
+      this.removeArtifactsForMessages(manifest.id, removed);
+      this.ensureActiveArtifact(manifest);
+      this.renderConversationHistory();
+      this.renderActiveArtifact();
+    }
+
+    rollbackMessage(messageId) {
+      const manifest = this.getActiveManifest();
+      const history = this.conversationService.getHistory(manifest);
+      const index = history.findIndex((msg) => msg.id === messageId);
+      if (index === -1) {
+        alert('未找到指定消息，请重试。');
+        return;
+      }
+      const target = history[index];
+      if (target.type !== 'ai') {
+        alert('只能退回到AI生成的消息。');
+        return;
+      }
+      if (index === history.length - 1) {
+        alert('该消息已是最新内容，无需退回。');
+        return;
+      }
+      if (
+        !confirm(
+          '退回将删除此消息之后的所有对话与图形，是否继续？'
+        )
+      ) {
+        return;
+      }
+      const removed = history.splice(index + 1);
+      if (!removed.length) {
+        return;
+      }
+      this.conversationService.saveHistory(manifest, history);
+      this.removeArtifactsForMessages(manifest.id, removed);
+      this.ensureActiveArtifact(manifest);
+      this.renderConversationHistory();
+      this.renderActiveArtifact();
+    }
+
+    regenerateMessage(messageId) {
+      if (this.isProcessing) {
+        alert('当前仍在生成中，请稍后再试。');
+        return;
+      }
+      const manifest = this.getActiveManifest();
+      const history = this.conversationService.getHistory(manifest);
+      const index = history.findIndex((msg) => msg.id === messageId);
+      if (index === -1) {
+        alert('未找到指定的AI消息。');
+        return;
+      }
+      const target = history[index];
+      if (target.type !== 'ai') {
+        alert('只能对AI回复执行重新生成。');
+        return;
+      }
+      if (index !== history.length - 1) {
+        alert('请先使用退回功能，确保该AI回复位于对话末尾后再重新生成。');
+        return;
+      }
+
+      let userIndex = -1;
+      for (let i = index - 1; i >= 0; i -= 1) {
+        if (history[i].type === 'user') {
+          userIndex = i;
+          break;
+        }
+      }
+      if (userIndex === -1) {
+        alert('未找到对应的用户消息，无法重新生成。');
+        return;
+      }
+      const userMessage = history[userIndex];
+
+      const removed = history.splice(index, 1);
+      this.conversationService.saveHistory(manifest, history);
+      this.removeArtifactsForMessages(manifest.id, removed);
+      this.ensureActiveArtifact(manifest);
+      this.renderConversationHistory();
+      this.renderActiveArtifact();
+
+      const contextMessages = history
+        .slice(0, userIndex)
+        .filter((msg) => msg.type === 'user' || msg.type === 'ai')
+        .map((msg) => ({
+          role: msg.type === 'user' ? 'user' : 'assistant',
+          content: msg.content
+        }));
+
+      this.isProcessing = true;
+      this.pendingCancel = false;
+      this.setSendButtonState('streaming');
+      this.el.sendButton.disabled = false;
+
+      this.beginStreaming(manifest, {
+        userMessage,
+        contextMessages
+      });
+    }
+
+    removeArtifactsForMessages(moduleId, messages = []) {
+      if (!messages.length) return;
+      const artifacts = this.runtime.getArtifacts(moduleId);
+      const idsToRemove = new Set();
+      messages.forEach((msg) => {
+        if (msg.artifactId && artifacts[msg.artifactId]) {
+          idsToRemove.add(msg.artifactId);
+        }
+      });
+
+      const messageIdSet = new Set(messages.map((msg) => msg.id));
+      Object.entries(artifacts).forEach(([id, artifact]) => {
+        if (artifact.messageId && messageIdSet.has(artifact.messageId)) {
+          idsToRemove.add(id);
+        }
+      });
+
+      idsToRemove.forEach((id) => this.runtime.removeArtifact(moduleId, id));
+    }
+
+    ensureActiveArtifact(manifest) {
+      const state = this.runtime.getState(manifest.id);
+      const artifacts = state.artifacts || {};
+      if (state.currentArtifactId && artifacts[state.currentArtifactId]) {
+        return state.currentArtifactId;
+      }
+      const history = this.conversationService.getHistory(manifest);
+      let nextId = null;
+      for (let i = history.length - 1; i >= 0; i -= 1) {
+        const candidateId = history[i].artifactId;
+        if (candidateId && artifacts[candidateId]) {
+          nextId = candidateId;
+          break;
+        }
+      }
+      this.runtime.setActiveArtifact(manifest.id, nextId);
+      return nextId;
     }
 
     sendMessage() {
@@ -387,16 +651,26 @@
       this.setSendButtonState('streaming');
       this.el.sendButton.disabled = false;
 
-      this.startStreaming(manifest, context);
+      this.beginStreaming(manifest, {
+        userMessage: context.userMessage,
+        contextMessages: context.contextMessages
+      });
     }
 
-    startStreaming(manifest, context) {
+    beginStreaming(manifest, payload) {
       const messageId = Utils.generateId('msg');
       const container = this.createStreamingContainer(messageId);
       this.el.chatHistory.appendChild(container);
       Utils.scrollToBottom(this.el.chatHistory);
 
       let fullContent = '';
+      const streamState = {
+        manifestId: manifest.id,
+        messageId,
+        container,
+        svg: null
+      };
+      this.streamState = streamState;
 
       const finalize = ({ aborted = false } = {}) => {
         if (!this.isProcessing) return;
@@ -405,13 +679,19 @@
         this.el.sendButton.disabled = false;
         this.activeStreamHandle = null;
         this.pendingCancel = false;
+        this.streamState = null;
 
         if (aborted) {
           container.remove();
           return;
         }
 
-        this.finalizeAssistantMessage(manifest, messageId, fullContent);
+        this.finalizeAssistantMessage(
+          manifest,
+          messageId,
+          fullContent,
+          streamState
+        );
       };
 
       const handleChunk = (chunk) => {
@@ -419,6 +699,9 @@
         if (!delta) return;
         fullContent += delta;
         this.updateStreamingContent(container, fullContent);
+        if (manifest.artifact?.type === 'svg') {
+          this.processSvgStreamChunk(manifest, fullContent, streamState);
+        }
       };
 
       const handleComplete = (info) => {
@@ -428,8 +711,8 @@
       this.apiClient
         .generateModuleStream(
           manifest,
-          context.userMessage.content,
-          context.contextMessages,
+          payload.userMessage.content,
+          payload.contextMessages,
           handleChunk,
           handleComplete,
           STREAM_DEFAULT_OPTIONS
@@ -445,6 +728,9 @@
         .then(() => finalize({ aborted: false }))
         .catch((error) => {
           console.error('发送消息失败:', error);
+          if (this.streamState && this.streamState === streamState) {
+            this.streamState = null;
+          }
           finalize({ aborted: true });
           this.addErrorMessage(
             error.message || '生成失败，请稍后再试',
@@ -476,7 +762,12 @@
       Utils.scrollToBottom(this.el.chatHistory);
     }
 
-    finalizeAssistantMessage(manifest, messageId, fullContent) {
+    finalizeAssistantMessage(
+      manifest,
+      messageId,
+      fullContent,
+      streamContext = null
+    ) {
       const container = this.el.chatHistory.querySelector(
         `[data-message-id="${messageId}"]`
       );
@@ -485,17 +776,18 @@
       }
 
       const timestamp = new Date().toISOString();
-      let artifactId = null;
+      let artifactId = streamContext?.svg?.artifactId || null;
       let artifactPayload = null;
+      let parsedResult = null;
 
       if (manifest.artifact?.parser) {
         try {
-          const parsed = manifest.artifact.parser(fullContent);
-          if (manifest.artifact.type === 'svg' && parsed.svgContent) {
+          parsedResult = manifest.artifact.parser(fullContent);
+          if (manifest.artifact.type === 'svg' && parsedResult.svgContent) {
             artifactId = Utils.generateId('svg');
-            const svgBody = parsed.svgContent.trim().endsWith('</svg>')
-              ? parsed.svgContent.trim()
-              : `${parsed.svgContent.trim()}\n</svg>`;
+            const svgBody = parsedResult.svgContent.trim().endsWith('</svg>')
+              ? parsedResult.svgContent.trim()
+              : `${parsedResult.svgContent.trim()}\n</svg>`;
             artifactPayload = {
               id: artifactId,
               type: manifest.artifact.type,
@@ -505,14 +797,16 @@
             };
           } else if (
             manifest.artifact.type === 'echarts-option' &&
-            parsed.option
+            parsedResult.option
           ) {
             artifactId = Utils.generateId('chart');
             artifactPayload = {
               id: artifactId,
               type: manifest.artifact.type,
-              option: parsed.option,
-              optionText: parsed.optionText || JSON.stringify(parsed.option),
+              option: parsedResult.option,
+              optionText:
+                parsedResult.optionText ||
+                JSON.stringify(parsedResult.option),
               messageId,
               timestamp
             };
@@ -522,10 +816,17 @@
         }
       }
 
+      const messageContent = this.buildAssistantDisplayContent(
+        manifest,
+        fullContent,
+        parsedResult,
+        artifactId
+      );
+
       const messageRecord = {
         id: messageId,
         type: 'ai',
-        content: fullContent,
+        content: messageContent,
         timestamp,
         artifactId
       };
@@ -539,6 +840,14 @@
       this.renderConversationHistory();
     }
 
+    parseMarkdownContent(text) {
+      if (!text) return '';
+      if (typeof marked !== 'undefined') {
+        return marked.parse(text);
+      }
+      return Utils.escapeHtml(text);
+    }
+
     addErrorMessage(errorText, manifest) {
       const message = {
         id: Utils.generateId('msg'),
@@ -549,6 +858,140 @@
       this.conversationService.appendMessage(manifest, message);
       this.renderConversationHistory();
     }
+
+    buildAssistantDisplayContent(manifest, rawContent, parsedResult, artifactId) {
+      const trim = (text) => (typeof text === 'string' ? text.trim() : '');
+      const segments = [];
+
+      if (parsedResult) {
+        if (manifest.artifact?.type === 'svg') {
+          const before = trim(parsedResult.beforeText);
+          const after = trim(parsedResult.afterText);
+          if (before) segments.push(before);
+          if (after) segments.push(after);
+        } else if (manifest.artifact?.type === 'echarts-option') {
+          const before = trim(parsedResult.beforeText);
+          const after = trim(parsedResult.afterText);
+          if (before) segments.push(before);
+          if (after) segments.push(after);
+        }
+      }
+
+      const content = segments.filter(Boolean).join('\n\n').trim();
+      if (content) {
+        return content;
+      }
+
+      if (artifactId) {
+        return `已生成 ${manifest.label} 图表，请点击占位卡片查看。`;
+      }
+
+      return rawContent.trim();
+    }
+
+    processSvgStreamChunk(manifest, fullContent, streamState) {
+      if (!streamState) {
+        return;
+      }
+      if (!streamState.svg) {
+        streamState.svg = {
+          started: false,
+          completed: false,
+          artifactId: null,
+          latestMarkup: ''
+        };
+      }
+      const svgCtx = streamState.svg;
+      const startPattern =
+        manifest.artifact?.startPattern || /```(?:svg)?\s*<svg/i;
+      if (!svgCtx.started) {
+        const match = fullContent.match(startPattern);
+        if (match) {
+          svgCtx.started = true;
+          svgCtx.startIndex = match.index;
+          svgCtx.artifactId = svgCtx.artifactId || Utils.generateId('svg');
+          svgCtx.beforeText = fullContent.substring(0, svgCtx.startIndex);
+          this.updateStreamingBubbleSvgPlaceholder(
+            streamState.container,
+            manifest,
+            svgCtx
+          );
+          this.showViewerStreaming(manifest);
+        }
+      }
+      if (!svgCtx.started) {
+        return;
+      }
+
+      const svgSection = fullContent.substring(svgCtx.startIndex);
+      let cleaned = svgSection.replace(/```(?:svg)?\s*/i, '');
+      cleaned = cleaned.replace(/```$/, '');
+      const closingIndex = cleaned.indexOf('</svg>');
+      if (closingIndex !== -1) {
+        svgCtx.completed = true;
+        cleaned = cleaned.substring(0, closingIndex + 6);
+        svgCtx.latestMarkup = cleaned;
+        this.renderTemporarySvg(cleaned, false, manifest);
+      } else if (cleaned.trim()) {
+        const temporaryMarkup = cleaned.endsWith('</svg>')
+          ? cleaned
+          : `${cleaned}\n</svg>`;
+        svgCtx.latestMarkup = temporaryMarkup;
+        this.renderTemporarySvg(temporaryMarkup, true, manifest);
+      }
+    }
+
+    updateStreamingBubbleSvgPlaceholder(container, manifest, svgCtx) {
+      if (!container) return;
+      const beforeHtml = this.parseMarkdownContent(svgCtx.beforeText || '');
+      const label = manifest.label || '图表';
+      container.innerHTML = `
+        <div class="chat-bubble-ai relative streaming-text" data-message-id="${container.dataset.messageId}">
+          <div>
+            ${beforeHtml}
+            <div class="svg-drawing-placeholder" data-temp-id="${svgCtx.artifactId}">
+              🎨 正在绘制${label}...
+            </div>
+            <div class="typing-cursor"></div>
+          </div>
+        </div>
+      `;
+      Utils.scrollToBottom(this.el.chatHistory);
+    }
+
+    showViewerStreaming(manifest) {
+      if (!this.el.viewer) return;
+      const label = manifest.label || '图表';
+      this.el.viewer.innerHTML = `
+        <div class="flex items-center justify-center w-full h-full">
+          <div class="text-center text-gray-600">
+            <iconify-icon icon="ph:spinner-gap" class="text-5xl text-purple-500 animate-spin"></iconify-icon>
+            <p class="mt-4 font-bold">正在绘制${label}...</p>
+          </div>
+        </div>
+      `;
+    }
+
+    renderTemporarySvg(svgMarkup, isPartial = false, manifest = null) {
+      if (!this.el.viewer || !svgMarkup) return;
+      this.el.viewer.innerHTML = '';
+      const wrapper = document.createElement('div');
+      wrapper.className = 'svg-content-wrapper';
+      wrapper.innerHTML = svgMarkup;
+      this.el.viewer.appendChild(wrapper);
+      if (isPartial) {
+        wrapper.style.opacity = '0.9';
+      } else {
+        wrapper.style.opacity = '1';
+      }
+      const uiState = this.runtime.getUiState(
+        manifest?.id || this.activeModuleId,
+        { zoom: 1 }
+      );
+      wrapper.style.transform = `scale(${uiState.zoom})`;
+      wrapper.style.transformOrigin = 'center top';
+    }
+
 
     cancelActiveStream() {
       if (!this.activeStreamHandle || typeof this.activeStreamHandle.cancel !== 'function') {
@@ -590,6 +1033,7 @@
       } else if (artifact.type === 'echarts-option') {
         this.renderEChartsArtifact(artifact);
       }
+      this.highlightActivePlaceholder();
       this.updateToolbarState();
     }
 
@@ -879,6 +1323,28 @@
       this.renderConversationHistory();
       this.showViewerPlaceholder(manifest.ui?.placeholderText || '');
       this.updateToolbarState();
+    }
+
+    highlightActivePlaceholder() {
+      if (!this.el.chatHistory) return;
+      const placeholders = this.el.chatHistory.querySelectorAll(
+        '.svg-placeholder-block'
+      );
+      placeholders.forEach((node) =>
+        node.classList.remove('svg-placeholder-active')
+      );
+      const activeArtifactId = this.runtime.getActiveArtifactId(
+        this.activeModuleId
+      );
+      if (!activeArtifactId) {
+        return;
+      }
+      const activeNode = this.el.chatHistory.querySelector(
+        `.svg-placeholder-block[data-artifact-id="${activeArtifactId}"]`
+      );
+      if (activeNode) {
+        activeNode.classList.add('svg-placeholder-active');
+      }
     }
 
     openConfigModal() {
