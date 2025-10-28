@@ -459,3 +459,5 @@ iconify-icon {
     object-fit: contain;
     max-width: 100% !important;
 }
+
+#dmermaidSvg{ height: 0px;}

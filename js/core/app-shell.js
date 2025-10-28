@@ -1169,7 +1169,12 @@
         streamState.mermaid = {
           started: false,
           artifactId: null,
-          beforeText: ''
+          beforeText: '',
+          renderedCode: null,
+          pendingCode: null,
+          renderLoopPromise: null,
+          codeStartIndex: null,
+          completed: false
         };
       }
       const ctx = streamState.mermaid;
@@ -1180,10 +1185,69 @@
           ctx.started = true;
           ctx.artifactId = ctx.artifactId || Utils.generateId('mermaid');
           ctx.beforeText = fullContent.substring(0, match.index);
+          ctx.codeStartIndex = match.index + match[0].length;
           this.updateMermaidPlaceholder(streamState.container, manifest, ctx);
           this.showViewerStreaming(manifest);
         }
       }
+      if (!ctx.started) {
+        return;
+      }
+      if (typeof ctx.codeStartIndex !== 'number' || ctx.codeStartIndex < 0) {
+        return;
+      }
+      let codeSection = fullContent.substring(ctx.codeStartIndex);
+      const closingFenceIndex = codeSection.indexOf('```');
+      if (closingFenceIndex !== -1) {
+        ctx.completed = true;
+        codeSection = codeSection.substring(0, closingFenceIndex);
+      }
+      const code = codeSection.trim();
+      if (!code || code === ctx.renderedCode) {
+        return;
+      }
+      this.scheduleMermaidStreamRender(manifest, streamState, code);
+    }
+
+    scheduleMermaidStreamRender(manifest, streamState, code) {
+      if (!streamState || !streamState.mermaid) return;
+      const ctx = streamState.mermaid;
+      ctx.pendingCode = code;
+      if (ctx.renderLoopPromise) {
+        return;
+      }
+      const renderLoop = async () => {
+        while (ctx.pendingCode && ctx.pendingCode !== ctx.renderedCode) {
+          const nextCode = ctx.pendingCode;
+          ctx.pendingCode = null;
+          try {
+            await this.ensureMermaidReady();
+            window.mermaid.parse(nextCode);
+            const renderId = `mermaidSvg`;
+            const { svg } = await window.mermaid.render(renderId, nextCode);
+            ctx.renderedCode = nextCode;
+            ctx.svgContent = svg;
+            streamState.mermaid.svgContent = svg;
+            streamState.mermaid.code = nextCode;
+            this.destroyMermaidPanZoom();
+            this.renderSvgMarkup(svg, manifest.id, {
+              applyTransform: false,
+              wrapperClasses: ['svg-content-wrapper--mermaid']
+            });
+          } catch (error) {
+            ctx.lastError = error;
+            console.warn('Mermaid 流式渲染失败，等待更多内容补全:', error);
+            break;
+          }
+        }
+      };
+      ctx.renderLoopPromise = renderLoop()
+        .catch((error) => {
+          console.warn('Mermaid 流式渲染循环异常:', error);
+        })
+        .finally(() => {
+          ctx.renderLoopPromise = null;
+        });
     }
 
     updateMermaidPlaceholder(container, manifest, ctx) {
@@ -1262,7 +1326,7 @@
         return artifact.svgContent;
       }
       await this.ensureMermaidReady();
-      const renderId = `mermaid-${artifact.id || Utils.generateId('mermaid')}-${Date.now()}`;
+      //const renderId = `mermaid-${artifact.id || Utils.generateId('mermaid')}-${Date.now()}`;
       const code = artifact.code || artifact.content || '';
       if (!code.trim()) {
         throw new Error('缺少 Mermaid 代码，无法渲染');
