@@ -28,6 +28,7 @@
       this.isProcessing = false;
       this.activeStreamHandle = null;
       this.pendingCancel = false;
+      this.manualAbortRequested = false;
       this.streamState = null;
       this.echartsInstance = null;
       this.mermaidPanZoom = null;
@@ -374,19 +375,21 @@
         return;
       }
 
-      let lastAiMessageId = null;
+      let lastAssistantLikeId = null;
       for (let i = history.length - 1; i >= 0; i -= 1) {
-        if (history[i].type === 'ai') {
-          lastAiMessageId = history[i].id;
+        if (history[i].type === 'ai' || history[i].type === 'error') {
+          lastAssistantLikeId = history[i].id;
           break;
         }
       }
 
       history.forEach((message) => {
+        const isAiMessage = message.type === 'ai';
+        const isAssistantLike = isAiMessage || message.type === 'error';
         const bubble = this.buildMessageBubble(message, {
-          allowRollback: message.type === 'ai',
+          allowRollback: isAiMessage,
           allowRegenerate:
-            message.type === 'ai' && message.id === lastAiMessageId,
+            isAssistantLike && message.id === lastAssistantLikeId,
           allowDelete: true
         });
         this.el.chatHistory.appendChild(bubble);
@@ -591,16 +594,17 @@
       const history = this.conversationService.getHistory(manifest);
       const index = history.findIndex((msg) => msg.id === messageId);
       if (index === -1) {
-        alert('未找到指定的AI消息。');
+        alert('未找到指定的回复。');
         return;
       }
       const target = history[index];
-      if (target.type !== 'ai') {
-        alert('只能对AI回复执行重新生成。');
+      const isAssistantLike = target.type === 'ai' || target.type === 'error';
+      if (!isAssistantLike) {
+        alert('只能对AI回复或错误提示执行重新生成。');
         return;
       }
       if (index !== history.length - 1) {
-        alert('请先使用退回功能，确保该AI回复位于对话末尾后再重新生成。');
+        alert('请先使用退回功能，确保该回复位于对话末尾后再重新生成。');
         return;
       }
 
@@ -724,6 +728,7 @@
     }
 
     beginStreaming(manifest, payload) {
+      this.manualAbortRequested = false;
       const messageId = Utils.generateId('msg');
       const container = this.createStreamingContainer(messageId);
       this.el.chatHistory.appendChild(container);
@@ -745,10 +750,18 @@
         this.el.sendButton.disabled = false;
         this.activeStreamHandle = null;
         this.pendingCancel = false;
+        const wasManualAbort = this.manualAbortRequested;
+        this.manualAbortRequested = false;
         this.streamState = null;
 
         if (aborted) {
           container.remove();
+          if (wasManualAbort) {
+            this.handleManualStreamAbort(manifest, messageId, fullContent);
+          } else {
+            this.ensureActiveArtifact(manifest);
+            this.renderActiveArtifact();
+          }
           return;
         }
 
@@ -916,9 +929,38 @@
       if (artifactId && artifactPayload) {
         this.runtime.saveArtifact(manifest.id, artifactId, artifactPayload);
         this.renderArtifact(artifactId);
+        if (
+          manifest.artifact?.type === 'mermaid' &&
+          parsedResult?.code
+        ) {
+          this.ensureFinalMermaidRender(
+            manifest,
+            artifactId,
+            messageId,
+            parsedResult.code,
+            streamContext?.mermaid || null
+          );
+        }
       }
 
       this.renderConversationHistory();
+    }
+
+    handleManualStreamAbort(manifest, messageId, fullContent) {
+      const content = (fullContent || '').trim();
+      const messageRecord = {
+        id: messageId,
+        type: 'ai',
+        content:
+          content || '生成已被手动终止，您可以点击重新生成继续。',
+        timestamp: new Date().toISOString(),
+        artifactId: null,
+        interrupted: true
+      };
+      this.conversationService.appendMessage(manifest, messageRecord);
+      this.ensureActiveArtifact(manifest);
+      this.renderConversationHistory();
+      this.renderActiveArtifact();
     }
 
     parseMarkdownContent(text) {
@@ -1174,7 +1216,8 @@
           pendingCode: null,
           renderLoopPromise: null,
           codeStartIndex: null,
-          completed: false
+          completed: false,
+          finalRendered: false
         };
       }
       const ctx = streamState.mermaid;
@@ -1186,6 +1229,7 @@
           ctx.artifactId = ctx.artifactId || Utils.generateId('mermaid');
           ctx.beforeText = fullContent.substring(0, match.index);
           ctx.codeStartIndex = match.index + match[0].length;
+          ctx.finalRendered = false;
           this.updateMermaidPlaceholder(streamState.container, manifest, ctx);
           this.showViewerStreaming(manifest);
         }
@@ -1206,6 +1250,7 @@
       if (!code || code === ctx.renderedCode) {
         return;
       }
+      ctx.finalRendered = false;
       this.scheduleMermaidStreamRender(manifest, streamState, code);
     }
 
@@ -1248,6 +1293,65 @@
         .finally(() => {
           ctx.renderLoopPromise = null;
         });
+    }
+
+    ensureFinalMermaidRender(
+      manifest,
+      artifactId,
+      messageId,
+      finalCode,
+      mermaidState
+    ) {
+      const state = mermaidState || {};
+      if (state.finalizing) {
+        return;
+      }
+      const alreadyFinal =
+        state.finalRendered &&
+        state.renderedCode === finalCode &&
+        !!state.svgContent;
+      if (alreadyFinal) {
+        return;
+      }
+      state.finalizing = true;
+      (async () => {
+        try {
+          await this.ensureMermaidReady();
+          window.mermaid.parse(finalCode);
+          const renderId = `mermaidSvg`;
+          const { svg } = await window.mermaid.render(renderId, finalCode);
+          state.renderedCode = finalCode;
+          state.svgContent = svg;
+          state.completed = true;
+          state.finalRendered = true;
+          const artifacts =
+            this.runtime.getArtifacts(manifest.id) || {};
+          const existing = artifacts[artifactId] || {
+            id: artifactId,
+            type: 'mermaid',
+            messageId
+          };
+          const updatedArtifact = {
+            ...existing,
+            code: finalCode,
+            svgContent: svg
+          };
+          this.runtime.saveArtifact(manifest.id, artifactId, updatedArtifact);
+          const currentId =
+            this.runtime.getState(manifest.id)?.currentArtifactId;
+          if (currentId === artifactId) {
+            this.destroyMermaidPanZoom();
+            this.renderSvgMarkup(svg, manifest.id, {
+              applyTransform: false,
+              wrapperClasses: ['svg-content-wrapper--mermaid']
+            });
+          }
+        } catch (error) {
+          console.warn('Mermaid 最终渲染失败:', error);
+        } finally {
+          state.finalizing = false;
+        }
+      })();
     }
 
     updateMermaidPlaceholder(container, manifest, ctx) {
@@ -1326,7 +1430,6 @@
         return artifact.svgContent;
       }
       await this.ensureMermaidReady();
-      //const renderId = `mermaid-${artifact.id || Utils.generateId('mermaid')}-${Date.now()}`;
       const code = artifact.code || artifact.content || '';
       if (!code.trim()) {
         throw new Error('缺少 Mermaid 代码，无法渲染');
@@ -1340,7 +1443,8 @@
         error.isMermaidSyntaxError = true;
         throw error;
       }
-      const { svg } = await window.mermaid.render("mermaidSvg", code);
+      const renderId = `mermaidSvg`;
+      const { svg } = await window.mermaid.render(renderId, code);
       const updatedArtifact = {
         ...artifact,
         svgContent: svg
@@ -1647,6 +1751,7 @@
 
 
     cancelActiveStream() {
+      this.manualAbortRequested = true;
       if (!this.activeStreamHandle || typeof this.activeStreamHandle.cancel !== 'function') {
         this.pendingCancel = true;
         this.setSendButtonState('terminating');
