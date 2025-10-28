@@ -1151,6 +1151,7 @@
     }
 
     initializeMermaidPanZoom(svgElementid, manifest) {
+      if (!svgElementid) return;
       let svgElement = document.getElementById(svgElementid);
       if (!svgElement) return;
       if (!window.svgPanZoom) {
@@ -1221,6 +1222,28 @@
         this.mermaidPanZoom.destroy();
       }
       this.mermaidPanZoom = null;
+    }
+
+    applyMermaidPanZoom(manifest) {
+      if (
+        !manifest ||
+        manifest.artifact?.type !== 'mermaid' ||
+        !this.el.viewer
+      ) {
+        return;
+      }
+      const svgElement = this.el.viewer.querySelector('svg');
+      if (!svgElement) return;
+      let svgId = svgElement.getAttribute('id');
+      if (!svgId) {
+        svgId =
+          (typeof Utils !== 'undefined' &&
+            typeof Utils.generateId === 'function' &&
+            Utils.generateId('mermaidSvg')) ||
+          `mermaidSvg-${Date.now()}`;
+        svgElement.setAttribute('id', svgId);
+      }
+      this.initializeMermaidPanZoom(svgId, manifest);
     }
 
     isZoomableManifest(manifest) {
@@ -1302,6 +1325,9 @@
               applyTransform: false,
               wrapperClasses: ['svg-content-wrapper--mermaid']
             });
+            if (ctx.completed) {
+              this.applyMermaidPanZoom(manifest);
+            }
           } catch (error) {
             ctx.lastError = error;
             console.warn('Mermaid 流式渲染失败，等待更多内容补全:', error);
@@ -1368,6 +1394,7 @@
               applyTransform: false,
               wrapperClasses: ['svg-content-wrapper--mermaid']
             });
+            this.applyMermaidPanZoom(manifest);
           }
         } catch (error) {
           console.warn('Mermaid 最终渲染失败:', error);
@@ -1421,11 +1448,7 @@
           applyTransform: false,
           wrapperClasses: ['svg-content-wrapper--mermaid']
         });
-        const svgElement = this.el.viewer.querySelector('svg');
-        if (svgElement) {
-          const svgid = svgElement.getAttribute('id', 'mermaidSvg');
-          this.initializeMermaidPanZoom(svgid, manifest);
-        }
+        this.applyMermaidPanZoom(manifest);
       } catch (error) {
         this.destroyMermaidPanZoom();
         console.error('Mermaid 渲染失败:', error);
