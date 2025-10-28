@@ -1593,7 +1593,7 @@
     }
 
     getMermaidExportScale() {
-      return Math.max(6, this.imageExportScale);
+      return Math.max(3, this.imageExportScale);
     }
 
     parseSvgNumeric(value) {
@@ -1721,7 +1721,7 @@
       const widthCandidate = Math.max(computedTargetWidth, scaledBaseWidth) || null;
       // 限制远程渲染服务的宽度参数，避免请求过大导致失败
       const MAX_MERMAID_WIDTH = 8192;
-      const width =
+      let width =
         widthCandidate && Number.isFinite(widthCandidate)
           ? Math.min(widthCandidate, MAX_MERMAID_WIDTH)
           : null;
