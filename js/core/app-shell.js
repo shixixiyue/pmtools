@@ -1238,11 +1238,22 @@
       } catch (error) {
         this.destroyMermaidPanZoom();
         console.error('Mermaid 渲染失败:', error);
+        const errorMessage = error.message || '未知错误';
         this.el.viewer.innerHTML = `
           <div class="p-4 text-center text-red-500 font-bold">
-            Mermaid 渲染失败：${Utils.escapeHtml(error.message || '未知错误')}
+            Mermaid 渲染失败：${Utils.escapeHtml(errorMessage)}
           </div>
         `;
+        if (this.el.chatInput) {
+          const existingValue = this.el.chatInput.value || '';
+          const appendedValue = existingValue.includes(errorMessage)
+            ? existingValue
+            : existingValue
+                ? `${existingValue}\n${errorMessage}`
+                : errorMessage;
+          this.el.chatInput.value = appendedValue;
+          Utils.autoResizeTextarea(this.el.chatInput);
+        }
       }
     }
 
@@ -1255,6 +1266,15 @@
       const code = artifact.code || artifact.content || '';
       if (!code.trim()) {
         throw new Error('缺少 Mermaid 代码，无法渲染');
+      }
+      try {
+        window.mermaid.parse(code);
+      } catch (parseError) {
+        const syntaxMessage =
+          parseError?.str || parseError?.message || '未知错误';
+        const error = new Error(`Mermaid 语法错误：${syntaxMessage}`);
+        error.isMermaidSyntaxError = true;
+        throw error;
       }
       const { svg } = await window.mermaid.render("mermaidSvg", code);
       const updatedArtifact = {
