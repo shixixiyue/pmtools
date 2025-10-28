@@ -70,6 +70,24 @@
       this.el.copyImageBtn = document.getElementById('copy-image-btn');
       this.el.exportImageBtn = document.getElementById('export-image-btn');
       this.el.viewCodeBtn = document.getElementById('view-code-btn');
+      const toolbarContainer = this.el.viewCodeBtn?.parentElement;
+      if (toolbarContainer) {
+        let editBtn = toolbarContainer.querySelector('#edit-mermaid-btn');
+        if (!editBtn) {
+          editBtn = document.createElement('button');
+          editBtn.id = 'edit-mermaid-btn';
+          editBtn.type = 'button';
+          editBtn.className =
+            'p-2 bg-purple-500 text-white border-2 border-black hover:bg-purple-600 transition-all flex items-center gap-1 hidden';
+          editBtn.title = '在 Mermaid Live 中编辑当前图表';
+          editBtn.innerHTML =
+            '<iconify-icon icon="mdi:vector-polyline-edit" class="text-xl"></iconify-icon><span class="text-sm font-bold">在Mermaid中编辑</span>';
+          toolbarContainer.appendChild(editBtn);
+        }
+        this.el.editMermaidBtn = editBtn;
+      } else {
+        this.el.editMermaidBtn = null;
+      }
 
       // 配置模态框
       this.el.settingsBtn = document.getElementById('settings-btn');
@@ -178,6 +196,11 @@
       if (this.el.viewCodeBtn) {
         this.el.viewCodeBtn.addEventListener('click', () =>
           this.viewArtifactCode()
+        );
+      }
+      if (this.el.editMermaidBtn) {
+        this.el.editMermaidBtn.addEventListener('click', () =>
+          this.openMermaidLiveEditor()
         );
       }
 
@@ -1534,6 +1557,41 @@
       return `https://mermaid.ink/img/pako:${encoded}?${params.toString()}`;
     }
 
+    openMermaidLiveEditor() {
+      const manifest = this.getActiveManifest();
+      if (!manifest || manifest.artifact?.type !== 'mermaid') {
+        console.warn('当前模块不支持 Mermaid 在线编辑');
+        return;
+      }
+      const state = this.runtime.getState(manifest.id) || {};
+      const artifactId = state.currentArtifactId;
+      if (!artifactId || !state.artifacts?.[artifactId]) {
+        alert('暂无可编辑的 Mermaid 图表，请先生成图表。');
+        return;
+      }
+      const artifact = state.artifacts[artifactId];
+      const code = this.getMermaidCode(artifact).trim();
+      if (!code) {
+        alert('当前图表缺少 Mermaid 代码，无法打开在线编辑器。');
+        return;
+      }
+      let encoded;
+      try {
+        encoded = this.encodeMermaidState(code);
+      } catch (error) {
+        console.error('构建 Mermaid 在线编辑链接失败:', error);
+        alert(error.message || '构建 Mermaid 编辑链接失败');
+        return;
+      }
+      const url = `https://mermaid.live/edit#pako:${encoded}`;
+      const editorWindow = window.open(url, '_blank', 'noopener');
+      if (!editorWindow) {
+        //alert('请允许浏览器弹出窗口以打开 Mermaid 编辑器。');
+        return;
+      }
+      editorWindow.opener = null;
+    }
+
     getMermaidExportScale() {
       return Math.max(6, this.imageExportScale);
     }
@@ -2170,6 +2228,11 @@
       if (this.el.viewCodeBtn) {
         this.el.viewCodeBtn.disabled =
           !hasArtifact || !manifest.exports?.allowCode;
+      }
+      if (this.el.editMermaidBtn) {
+        const isMermaidManifest = manifest.artifact?.type === 'mermaid';
+        this.el.editMermaidBtn.classList.toggle('hidden', !isMermaidManifest);
+        this.el.editMermaidBtn.disabled = !hasArtifact || !isMermaidManifest;
       }
     }
 
