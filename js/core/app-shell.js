@@ -2083,7 +2083,7 @@
     renderHtmlPreview(htmlContent, manifest, options = {}) {
       if (!this.el.viewer) return;
       const { partial = false } = options;
-      const preparedHtml = this.prepareHtmlDocument(htmlContent);
+      const preparedHtml = this.prepareHtmlDocument(htmlContent, { partial });
       this.el.viewer.innerHTML = '';
 
       const wrapper = document.createElement('div');
@@ -2115,16 +2115,66 @@
       this.el.viewer.appendChild(wrapper);
     }
 
-    prepareHtmlDocument(htmlContent) {
+    prepareHtmlDocument(htmlContent, options = {}) {
+      const { partial = false } = options;
       const raw = typeof htmlContent === 'string' ? htmlContent.trim() : '';
       if (!raw) {
         return '<!DOCTYPE html><html lang="zh-CN"><head><meta charset="utf-8"><title>空白页面</title></head><body><section style="display:flex;align-items:center;justify-content:center;height:100vh;font-family:sans-serif;color:#6b7280;background:#f9fafb;">暂无可展示内容</section></body></html>';
       }
       const hasDocumentTag = /<!DOCTYPE|<html[\s>]/i.test(raw);
       if (hasDocumentTag) {
-        return raw;
+        return this.ensureHtmlClosingTags(raw, { partial });
       }
-      return `<!DOCTYPE html><html lang="zh-CN"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><title>Generated Page</title></head><body>${raw}</body></html>`;
+      const bodyContent = raw;
+      const skeleton = `<!DOCTYPE html><html lang="zh-CN"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><title>Generated Page</title></head><body>${bodyContent}</body></html>`;
+      return this.ensureHtmlClosingTags(skeleton, { partial: false });
+    }
+
+    ensureHtmlClosingTags(html, options = {}) {
+      const { partial = false } = options;
+      let output = html;
+
+      const ensureClosingTag = (tag, insertionStrategy) => {
+        const openRegex = new RegExp(`<${tag}[\\s>]`, 'i');
+        const closeRegex = new RegExp(`</${tag}>`, 'i');
+        if (!openRegex.test(output) || closeRegex.test(output)) {
+          return;
+        }
+        const closingMarkup = `</${tag}>`;
+        const insertAt = insertionStrategy();
+        if (insertAt < 0 || insertAt > output.length) {
+          output += `\n${closingMarkup}`;
+        } else {
+          output =
+            output.slice(0, insertAt) +
+            `\n${closingMarkup}\n` +
+            output.slice(insertAt);
+        }
+      };
+
+      ensureClosingTag('head', () => {
+        const bodyIndex = output.search(/<body[\s>]/i);
+        if (bodyIndex !== -1) return bodyIndex;
+        const htmlCloseIndex = output.search(/<\/html>/i);
+        if (htmlCloseIndex !== -1) return htmlCloseIndex;
+        return output.length;
+      });
+
+      ensureClosingTag('body', () => {
+        const htmlCloseIndex = output.search(/<\/html>/i);
+        return htmlCloseIndex !== -1 ? htmlCloseIndex : output.length;
+      });
+
+      ensureClosingTag('html', () => output.length);
+
+      if (partial) {
+        // 对流式场景追加最外层闭合，避免 iframe 在标签未闭合时渲染失败
+        if (!/</i.test(output.slice(-10))) {
+          output += '\n';
+        }
+      }
+
+      return output;
     }
 
     adjustZoom(delta) {
