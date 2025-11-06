@@ -350,6 +350,34 @@ iconify-icon {
   max-width: 760px;
 }
 
+.page-preview-modal {
+  width: 98vw;
+  height: 98vh;
+  max-width: 98vw;
+  max-height: 98vh;
+  display: flex;
+  flex-direction: column;
+  padding: 0;
+}
+
+.page-preview-body {
+  flex: 1;
+  background: #0f172a;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 8px;
+}
+
+.page-preview-iframe {
+  width: 100%;
+  height: 100%;
+  border: 3px solid #000;
+  background: white;
+  border-radius: 8px;
+  box-shadow: 0 8px 24px rgba(15, 23, 42, 0.45);
+}
+
 .code-viewer {
   background: #0f172a;
   color: #f8fafc;

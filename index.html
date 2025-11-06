@@ -109,6 +109,9 @@
           <button id="export-image-btn" class="p-2 bg-green-500 text-white border-2 border-black hover:bg-green-600 transition-all" title="导出为图片">
             <iconify-icon icon="mdi:image-outline" class="text-xl"></iconify-icon>
           </button>
+          <button id="open-page-btn" class="p-2 bg-cyan-500 text-white border-2 border-black hover:bg-cyan-600 transition-all" title="预览落地页">
+            <iconify-icon icon="ph:monitor-play-bold" class="text-xl"></iconify-icon>
+          </button>
           <button id="view-code-btn" class="p-2 bg-blue-500 text-white border-2 border-black hover:bg-blue-600 transition-all" title="查看代码">
             <iconify-icon icon="mdi:code-tags" class="text-xl"></iconify-icon>
           </button>
@@ -220,6 +223,30 @@
             </button>
           </div>
           <pre id="code-content" class="code-viewer"></pre>
+        </div>
+      </div>
+    </div>
+
+    <!-- 页面预览模态窗 -->
+    <div id="page-preview-modal" class="modal-overlay">
+      <div class="modal-content page-preview-modal">
+        <div class="bg-gradient-to-r from-teal-500 to-cyan-500 p-3 border-b-4 border-black flex items-center justify-between">
+          <div class="flex items-center gap-2">
+            <iconify-icon icon="ph:monitor-play-fill" class="text-2xl text-white"></iconify-icon>
+            <h2 class="text-lg md:text-xl font-black text-white">落地页全屏预览</h2>
+          </div>
+          <div class="flex items-center gap-2">
+            <button id="page-preview-newtab-btn" class="px-3 py-1 bg-white text-teal-600 border-2 border-black font-semibold hover:bg-teal-50 transition-all flex items-center gap-1">
+              <iconify-icon icon="ph:arrow-square-out-bold" class="text-lg"></iconify-icon>
+              新窗口打开
+            </button>
+            <button id="close-page-preview-btn" class="text-white hover:bg-white/20 p-2 transition-all">
+              <iconify-icon icon="ph:x-bold" class="text-2xl"></iconify-icon>
+            </button>
+          </div>
+        </div>
+        <div class="page-preview-body">
+          <iframe id="page-preview-iframe" title="落地页全屏预览" sandbox="allow-scripts allow-same-origin allow-forms allow-pointer-lock" class="page-preview-iframe"></iframe>
         </div>
       </div>
     </div>

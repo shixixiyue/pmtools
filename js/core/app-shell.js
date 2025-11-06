@@ -69,6 +69,7 @@
       this.el.downloadSvgBtn = document.getElementById('download-svg-btn');
       this.el.copyImageBtn = document.getElementById('copy-image-btn');
       this.el.exportImageBtn = document.getElementById('export-image-btn');
+      this.el.openPageBtn = document.getElementById('open-page-btn');
       this.el.viewCodeBtn = document.getElementById('view-code-btn');
       const toolbarContainer = this.el.viewCodeBtn?.parentElement;
       if (toolbarContainer) {
@@ -104,6 +105,14 @@
       this.el.codeContent = document.getElementById('code-content');
       this.el.copyCodeBtn = document.getElementById('copy-code-btn');
       this.el.closeCodeModalBtn = document.getElementById('close-code-modal-btn');
+      this.el.pagePreviewModal = document.getElementById('page-preview-modal');
+      this.el.pagePreviewIframe = document.getElementById('page-preview-iframe');
+      this.el.closePagePreviewBtn = document.getElementById(
+        'close-page-preview-btn'
+      );
+      this.el.pagePreviewNewTabBtn = document.getElementById(
+        'page-preview-newtab-btn'
+      );
 
       // 复制按钮可用性
       if (this.el.copyImageBtn && !this.copyClipboardSupported) {
@@ -193,6 +202,11 @@
           )
         );
       }
+      if (this.el.openPageBtn) {
+        this.el.openPageBtn.addEventListener('click', () =>
+          this.openPagePreview()
+        );
+      }
       if (this.el.viewCodeBtn) {
         this.el.viewCodeBtn.addEventListener('click', () =>
           this.viewArtifactCode()
@@ -247,6 +261,23 @@
       if (this.el.closeCodeModalBtn) {
         this.el.closeCodeModalBtn.addEventListener('click', () =>
           this.closeCodeModal()
+        );
+      }
+      if (this.el.closePagePreviewBtn) {
+        this.el.closePagePreviewBtn.addEventListener('click', () =>
+          this.closePagePreview()
+        );
+      }
+      if (this.el.pagePreviewModal) {
+        this.el.pagePreviewModal.addEventListener('click', (event) => {
+          if (event.target === this.el.pagePreviewModal) {
+            this.closePagePreview();
+          }
+        });
+      }
+      if (this.el.pagePreviewNewTabBtn) {
+        this.el.pagePreviewNewTabBtn.addEventListener('click', () =>
+          this.openPageInNewTab()
         );
       }
       if (this.el.codeModal) {
@@ -337,6 +368,10 @@
       }
       this.renderQuickActions(manifest.ui?.quickActions || []);
       this.showViewerPlaceholder(manifest.ui?.placeholderText || '');
+      if (this.el.openPageBtn) {
+        const isHtmlModule = manifest.artifact?.type === 'html';
+        this.el.openPageBtn.classList.toggle('hidden', !isHtmlModule);
+      }
     }
 
     showViewerPlaceholder(text) {
@@ -1956,6 +1991,79 @@
       }
     }
 
+    getActiveHtmlArtifact(manifest = null) {
+      const targetManifest = manifest || this.getActiveManifest();
+      if (!targetManifest || targetManifest.artifact?.type !== 'html') {
+        return null;
+      }
+      const state = this.runtime.getState(targetManifest.id);
+      if (!state?.currentArtifactId) {
+        return null;
+      }
+      return state.artifacts[state.currentArtifactId] || null;
+    }
+
+    openPagePreview() {
+      const manifest = this.getActiveManifest();
+      if (!manifest || manifest.artifact?.type !== 'html') {
+        alert('当前模块不支持页面预览，请切换到落地页生成模块。');
+        return;
+      }
+      const artifact = this.getActiveHtmlArtifact(manifest);
+      if (!artifact || !artifact.content) {
+        alert('尚未生成落地页内容，请先完成一次生成。');
+        return;
+      }
+      const htmlDoc = this.prepareHtmlDocument(artifact.content, {
+        partial: false
+      });
+      if (this.el.pagePreviewIframe) {
+        this.el.pagePreviewIframe.srcdoc = htmlDoc;
+        this.el.pagePreviewIframe.dataset.updatedAt =
+          new Date().toISOString();
+      }
+      if (this.el.pagePreviewModal) {
+        this.el.pagePreviewModal.classList.add('active');
+        this.el.pagePreviewModal.style.display = 'flex';
+      }
+    }
+
+    closePagePreview() {
+      if (!this.el.pagePreviewModal) return;
+      this.el.pagePreviewModal.classList.remove('active');
+      this.el.pagePreviewModal.style.display = 'none';
+    }
+
+    openPageInNewTab() {
+      const manifest = this.getActiveManifest();
+      if (!manifest || manifest.artifact?.type !== 'html') {
+        alert('只能在落地页生成模块中打开新窗口预览。');
+        return;
+      }
+      const artifact = this.getActiveHtmlArtifact(manifest);
+      if (!artifact || !artifact.content) {
+        alert('当前落地页内容为空，请先生成或刷新内容。');
+        return;
+      }
+      const htmlDoc = this.prepareHtmlDocument(artifact.content, {
+        partial: false
+      });
+      try {
+        const blob = new Blob([htmlDoc], { type: 'text/html' });
+        const url = URL.createObjectURL(blob);
+        const opened = window.open(url, '_blank', 'noopener');
+        if (!opened) {
+          //alert('浏览器阻止了新窗口，请允许弹窗或手动复制代码。');
+        } else if (opened.focus) {
+          opened.focus();
+        }
+        setTimeout(() => URL.revokeObjectURL(url), 30_000);
+      } catch (error) {
+        console.error('打开新窗口失败:', error);
+        alert('打开新窗口失败，请检查浏览器设置或下载代码后手动打开。');
+      }
+    }
+
 
     cancelActiveStream() {
       this.manualAbortRequested = true;
@@ -2113,6 +2221,14 @@
       }
 
       this.el.viewer.appendChild(wrapper);
+
+      if (this.el.pagePreviewIframe && !partial) {
+        this.el.pagePreviewIframe.srcdoc = preparedHtml;
+        this.el.pagePreviewIframe.dataset.updatedAt =
+          new Date().toISOString();
+      } else if (this.el.pagePreviewIframe && partial) {
+        this.el.pagePreviewIframe.srcdoc = preparedHtml;
+      }
     }
 
     prepareHtmlDocument(htmlContent, options = {}) {
@@ -2166,13 +2282,6 @@
       });
 
       ensureClosingTag('html', () => output.length);
-
-      if (partial) {
-        // 对流式场景追加最外层闭合，避免 iframe 在标签未闭合时渲染失败
-        if (!/</i.test(output.slice(-10))) {
-          output += '\n';
-        }
-      }
 
       return output;
     }
@@ -2495,6 +2604,10 @@
         const isMermaidManifest = manifest.artifact?.type === 'mermaid';
         this.el.editMermaidBtn.classList.toggle('hidden', !isMermaidManifest);
         this.el.editMermaidBtn.disabled = !hasArtifact || !isMermaidManifest;
+      }
+      if (this.el.openPageBtn) {
+        const isHtmlManifest = manifest.artifact?.type === 'html';
+        this.el.openPageBtn.disabled = !hasArtifact || !isHtmlManifest;
       }
     }
 
