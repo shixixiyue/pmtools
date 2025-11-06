@@ -1,0 +1,14 @@
+{
+  "mcpServers": {
+    "canva-dev": {
+      "command": "npx",
+      "args": [
+        "-y",
+        "@canva/cli@latest",
+        "mcp"
+      ],
+      "disabled": false,
+      "alwaysAllow": []
+    }
+  }
+}
