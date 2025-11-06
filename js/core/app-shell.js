@@ -762,7 +762,8 @@
         manifestId: manifest.id,
         messageId,
         container,
-        svg: null
+        svg: null,
+        html: null
       };
       this.streamState = streamState;
 
@@ -805,6 +806,8 @@
           this.processSvgStreamChunk(manifest, fullContent, streamState);
         } else if (manifest.artifact?.type === 'mermaid') {
           this.processMermaidStreamChunk(manifest, fullContent, streamState);
+        } else if (manifest.artifact?.type === 'html') {
+          this.processHtmlStreamChunk(manifest, fullContent, streamState);
         }
       };
 
@@ -927,6 +930,19 @@
               messageId,
               timestamp
             };
+          } else if (
+            manifest.artifact.type === 'html' &&
+            parsedResult.htmlContent
+          ) {
+            artifactId =
+              streamContext?.html?.artifactId || Utils.generateId('html');
+            artifactPayload = {
+              id: artifactId,
+              type: manifest.artifact.type,
+              content: parsedResult.htmlContent.trim(),
+              messageId,
+              timestamp
+            };
           }
         } catch (error) {
           console.warn('解析助手内容失败:', error);
@@ -1025,6 +1041,11 @@
           const after = trim(parsedResult.afterText);
           if (before) segments.push(before);
           if (after) segments.push(after);
+        } else if (manifest.artifact?.type === 'html') {
+          const before = trim(parsedResult.beforeText);
+          const after = trim(parsedResult.afterText);
+          if (before) segments.push(before);
+          if (after) segments.push(after);
         }
       }
 
@@ -1092,6 +1113,92 @@
       }
     }
 
+    processHtmlStreamChunk(manifest, fullContent, streamState) {
+      if (!streamState) return;
+      if (!streamState.html) {
+        streamState.html = {
+          started: false,
+          artifactId: null,
+          startIndex: null,
+          beforeText: '',
+          latestHtml: '',
+          completed: false,
+          completedRendered: false,
+          nextRenderAt: null
+        };
+      }
+      const ctx = streamState.html;
+      const startPattern =
+        manifest.artifact?.startPattern || /```(?:html|htm)/i;
+      if (!ctx.started) {
+        const match = fullContent.match(startPattern);
+        let startIndex = null;
+        let beforeText = '';
+        if (match) {
+          startIndex = match.index + match[0].length;
+          beforeText = fullContent.substring(0, match.index);
+        } else {
+          const fallbackIndex = fullContent.search(/<!DOCTYPE|<html|<body/i);
+          if (fallbackIndex !== -1) {
+            startIndex = fallbackIndex;
+            beforeText = fullContent.substring(0, fallbackIndex);
+          }
+        }
+        if (startIndex !== null && startIndex >= 0) {
+          ctx.started = true;
+          ctx.artifactId = ctx.artifactId || Utils.generateId('html');
+          ctx.startIndex = startIndex;
+          ctx.beforeText = beforeText;
+          this.updateHtmlPlaceholder(streamState.container, manifest, ctx);
+          this.showViewerStreaming(manifest);
+        }
+      }
+      if (!ctx.started) {
+        return;
+      }
+      if (typeof ctx.startIndex !== 'number' || ctx.startIndex < 0) {
+        return;
+      }
+      let htmlSection = fullContent.substring(ctx.startIndex);
+      const closingFenceIndex = htmlSection.indexOf('```');
+      if (closingFenceIndex !== -1) {
+        ctx.completed = true;
+        htmlSection = htmlSection.substring(0, closingFenceIndex);
+      }
+      const cleaned = htmlSection.trim();
+      const hasContent = !!cleaned;
+      const contentChanged = hasContent && cleaned !== ctx.latestHtml;
+      const shouldRenderFinal = ctx.completed && !ctx.completedRendered;
+      if (!hasContent && !shouldRenderFinal) {
+        return;
+      }
+      if (!contentChanged && !shouldRenderFinal) {
+        return;
+      }
+
+      const now = Date.now();
+      if (!ctx.completed) {
+        if (ctx.nextRenderAt && now < ctx.nextRenderAt) {
+          return;
+        }
+        ctx.nextRenderAt = now + 250;
+      } else {
+        ctx.nextRenderAt = null;
+      }
+
+      if (contentChanged) {
+        ctx.latestHtml = cleaned;
+      }
+      const htmlForPreview = contentChanged ? cleaned : ctx.latestHtml;
+      streamState.html.htmlContent = htmlForPreview;
+      this.renderHtmlPreview(htmlForPreview, manifest, {
+        partial: !ctx.completed
+      });
+      if (ctx.completed) {
+        ctx.completedRendered = true;
+      }
+    }
+
     updateStreamingBubbleSvgPlaceholder(container, manifest, svgCtx) {
       if (!container) return;
       const beforeHtml = this.parseMarkdownContent(svgCtx.beforeText || '');
@@ -1110,14 +1217,33 @@
       Utils.scrollToBottom(this.el.chatHistory);
     }
 
+    updateHtmlPlaceholder(container, manifest, ctx) {
+      if (!container) return;
+      const beforeHtml = this.parseMarkdownContent(ctx.beforeText || '');
+      const label = manifest.label || '页面';
+      container.innerHTML = `
+        <div class="chat-bubble-ai relative streaming-text" data-message-id="${container.dataset.messageId}">
+          <div>
+            ${beforeHtml}
+            <div class="svg-drawing-placeholder" data-temp-id="${ctx.artifactId}">
+              🏗️ 正在构建${label} HTML…
+            </div>
+            <div class="typing-cursor"></div>
+          </div>
+        </div>
+      `;
+      Utils.scrollToBottom(this.el.chatHistory);
+    }
+
     showViewerStreaming(manifest) {
       if (!this.el.viewer) return;
       const label = manifest.label || '图表';
+      const verb = manifest.artifact?.type === 'html' ? '构建' : '绘制';
       this.el.viewer.innerHTML = `
         <div class="flex items-center justify-center w-full h-full">
           <div class="text-center text-gray-600">
             <iconify-icon icon="ph:spinner-gap" class="text-5xl text-purple-500 animate-spin"></iconify-icon>
-            <p class="mt-4 font-bold">正在绘制${label}...</p>
+            <p class="mt-4 font-bold">正在${verb}${label}...</p>
           </div>
         </div>
       `;
@@ -1875,6 +2001,9 @@
       } else if (artifact.type === 'echarts-option') {
         this.destroyMermaidPanZoom();
         this.renderEChartsArtifact(artifact);
+      } else if (artifact.type === 'html') {
+        this.destroyMermaidPanZoom();
+        this.renderHtmlArtifact(artifact, manifest);
       }
       this.highlightActivePlaceholder();
       this.updateToolbarState();
@@ -1938,6 +2067,64 @@
         useDirtyRect: false
       });
       this.echartsInstance.setOption(artifact.option, true);
+    }
+
+    renderHtmlArtifact(artifact, manifest) {
+      if (!manifest) {
+        manifest = this.getActiveManifest();
+      }
+      if (!artifact || !artifact.content) {
+        this.showViewerPlaceholder(manifest?.ui?.placeholderText || '');
+        return;
+      }
+      this.renderHtmlPreview(artifact.content, manifest, { partial: false });
+    }
+
+    renderHtmlPreview(htmlContent, manifest, options = {}) {
+      if (!this.el.viewer) return;
+      const { partial = false } = options;
+      const preparedHtml = this.prepareHtmlDocument(htmlContent);
+      this.el.viewer.innerHTML = '';
+
+      const wrapper = document.createElement('div');
+      wrapper.className =
+        'w-full h-full relative rounded-xl overflow-hidden shadow-lg bg-white border border-purple-200';
+
+      const iframe = document.createElement('iframe');
+      iframe.className = 'w-full h-full border-0 bg-white';
+      iframe.setAttribute(
+        'title',
+        `${manifest?.label || '页面'}预览`
+      );
+      iframe.setAttribute(
+        'sandbox',
+        'allow-forms allow-pointer-lock allow-same-origin allow-scripts'
+      );
+      iframe.srcdoc = preparedHtml;
+      wrapper.appendChild(iframe);
+
+      if (partial) {
+        const banner = document.createElement('div');
+        banner.className =
+          'absolute inset-x-0 top-0 flex justify-end pointer-events-none';
+        banner.innerHTML =
+          '<span class="m-3 px-3 py-1 text-xs font-semibold bg-yellow-300/90 text-gray-900 border border-yellow-600 rounded-full shadow-sm">内容生成中…</span>';
+        wrapper.appendChild(banner);
+      }
+
+      this.el.viewer.appendChild(wrapper);
+    }
+
+    prepareHtmlDocument(htmlContent) {
+      const raw = typeof htmlContent === 'string' ? htmlContent.trim() : '';
+      if (!raw) {
+        return '<!DOCTYPE html><html lang="zh-CN"><head><meta charset="utf-8"><title>空白页面</title></head><body><section style="display:flex;align-items:center;justify-content:center;height:100vh;font-family:sans-serif;color:#6b7280;background:#f9fafb;">暂无可展示内容</section></body></html>';
+      }
+      const hasDocumentTag = /<!DOCTYPE|<html[\s>]/i.test(raw);
+      if (hasDocumentTag) {
+        return raw;
+      }
+      return `<!DOCTYPE html><html lang="zh-CN"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><title>Generated Page</title></head><body>${raw}</body></html>`;
     }
 
     adjustZoom(delta) {
@@ -2168,6 +2355,8 @@
         content = artifact.code || artifact.content || '';
       } else if (artifact.type === 'echarts-option') {
         content = artifact.optionText || JSON.stringify(artifact.option, null, 2);
+      } else if (artifact.type === 'html') {
+        content = artifact.content || '';
       }
 
       this.openCodeModal(content);

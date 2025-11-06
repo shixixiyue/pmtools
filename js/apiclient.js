@@ -14,7 +14,8 @@ class APIClient {
       canvas: 'prompts/canvas-prompt.txt',
       swot: 'prompts/swot-prompt.txt',
       echarts: 'prompts/echarts-prompt.txt',
-      mermaid: 'prompts/mermaid-prompt.txt'
+      mermaid: 'prompts/mermaid-prompt.txt',
+      onepage: 'prompts/onepage-prompt.txt'
     };
     this.promptFallbacks = {
       canvas: '你是一个专业的产品战略分析师，擅长创建产品画布。',
@@ -23,6 +24,8 @@ class APIClient {
         '你是一个资深的数据可视化专家，精通将自然语言需求转化为 ECharts 配置对象，请输出结构化 JSON option。',
       mermaid:
         '你是一个资深的可视化工程师，擅长用 Mermaid 语法创建清晰的图示，请只输出一个 ```mermaid 代码块。',
+      onepage:
+        '你是一名资深的落地页架构师，请基于需求生成完整的单文件 HTML（含 Tailwind 样式与必要的原生脚本），并使用 ```html 代码块封装输出。',
       default:
         '你是一个可靠的智能助手，请直接回答用户的问题并提供结构化输出。'
     };
