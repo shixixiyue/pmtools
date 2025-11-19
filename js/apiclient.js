@@ -298,7 +298,8 @@ class APIClient {
       .filter(msg => msg.id <= messageId)
       .map(msg => ({
         role: msg.type === 'user' ? 'user' : 'assistant',
-        content: msg.content
+        // 优先使用原始内容，保证上下文完整性
+        content: msg.rawContent || msg.content || ''
       }));
 
     if (contextMessages.length === 0) {

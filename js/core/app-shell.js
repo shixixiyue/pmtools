@@ -2,7 +2,7 @@
   'use strict';
 
   const STREAM_DEFAULT_OPTIONS = {
-    maxTokens: 13000,
+    maxTokens: 30000,
     temperature: 0.7
   };
 
@@ -691,7 +691,8 @@
         .filter((msg) => msg.type === 'user' || msg.type === 'ai')
         .map((msg) => ({
           role: msg.type === 'user' ? 'user' : 'assistant',
-          content: msg.content
+          // 使用原始内容作为 LLM 上下文，兼容无 rawContent 的旧记录
+          content: msg.rawContent || msg.content || ''
         }));
 
       this.isProcessing = true;
@@ -836,7 +837,7 @@
         const delta = chunk?.choices?.[0]?.delta?.content || '';
         if (!delta) return;
         fullContent += delta;
-        this.updateStreamingContent(container, fullContent);
+        this.updateStreamingContent(container, fullContent, streamState, manifest);
         if (manifest.artifact?.type === 'svg') {
           this.processSvgStreamChunk(manifest, fullContent, streamState);
         } else if (manifest.artifact?.type === 'mermaid') {
@@ -893,13 +894,21 @@
       return messageDiv;
     }
 
-    updateStreamingContent(container, content) {
+    updateStreamingContent(container, content, streamContext = null, manifest = null) {
       const cursor = container.querySelector('.typing-cursor');
       if (!cursor) return;
+
+      // 对于 HTML 模块，HTML 内容已经在右侧预览区域实时渲染，
+      // 为避免在对话气泡中直接注入 <html>/<body> 文档结构，这里不再渲染流式内容。
+      if (manifest?.artifact?.type === 'html') {
+        return;
+      }
+
+      const displayContent = content;
       if (typeof marked !== 'undefined') {
-        cursor.innerHTML = marked.parse(content);
+        cursor.innerHTML = marked.parse(displayContent);
       } else {
-        cursor.textContent = content;
+        cursor.textContent = displayContent;
       }
       Utils.scrollToBottom(this.el.chatHistory);
     }
@@ -994,7 +1003,10 @@
       const messageRecord = {
         id: messageId,
         type: 'ai',
+        // content 用于展示（可能是裁剪/清洗后的文本）
         content: messageContent,
+        // rawContent 保留完整的 LLM 原始响应，用于上下文与重新生成
+        rawContent: fullContent,
         timestamp,
         artifactId
       };
@@ -1027,6 +1039,7 @@
         type: 'ai',
         content:
           content || '生成已被手动终止，您可以点击重新生成继续。',
+        rawContent: fullContent || content || '',
         timestamp: new Date().toISOString(),
         artifactId: null,
         interrupted: true
@@ -1084,13 +1097,36 @@
         }
       }
 
-      const content = segments.filter(Boolean).join('\n\n').trim();
+      let content = segments.filter(Boolean).join('\n\n').trim();
+
+      // 对于 HTML 模块，额外清理尾部可能残留的空 ```html 代码块
+      // 场景：模型输出两个 ```html 代码块，第二个为空；解析器只提取第一个，
+      // 剩余的空代码块会进入 before/after，最终在气泡中渲染出一个空的 <pre><code>。
+      if (manifest.artifact?.type === 'html' && content) {
+        const withoutEmptyHtmlFence = content.replace(
+          /\n*```(?:html|htm)?\s*```[\s]*$/i,
+          ''
+        );
+        if (withoutEmptyHtmlFence.trim()) {
+          content = withoutEmptyHtmlFence.trim();
+        }
+      }
+
       if (content) {
         return content;
       }
 
       if (artifactId) {
         return `已生成 ${manifest.label} 图表，请点击占位卡片查看。`;
+      }
+
+      // HTML 模块：避免将完整 HTML 文档渲染到对话气泡中
+      if (manifest.artifact?.type === 'html') {
+        const safeText = (rawContent || '')
+          // 去掉主/副 ```html 代码块，保留其余说明文字
+          .replace(/```(?:html|htm)?[\s\S]*?```/gi, '')
+          .trim();
+        return safeText || `已生成 ${manifest.label} 页面内容，请查看预览区域。`;
       }
 
       return rawContent.trim();

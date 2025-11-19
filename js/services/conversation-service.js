@@ -102,7 +102,8 @@
         .filter((msg) => msg.type === 'user' || msg.type === 'ai')
         .map((msg) => ({
           role: msg.type === 'user' ? 'user' : 'assistant',
-          content: msg.content
+          // 优先使用原始内容构建上下文，兼容旧数据回退到 content
+          content: msg.rawContent || msg.content || ''
         }));
 
       return {
