@@ -13,6 +13,7 @@ class APIClient {
     this.promptFiles = {
       canvas: 'prompts/canvas-prompt.txt',
       swot: 'prompts/swot-prompt.txt',
+      thinksvg: 'prompts/thinksvg-prompt.txt',
       echarts: 'prompts/echarts-prompt.txt',
       mermaid: 'prompts/mermaid-prompt.txt',
       onepage: 'prompts/onepage-prompt.txt'
@@ -20,6 +21,7 @@ class APIClient {
     this.promptFallbacks = {
       canvas: '你是一个专业的产品战略分析师，擅长创建产品画布。',
       swot: '你是一个专业的商业战略分析师，擅长进行SWOT分析。',
+      thinksvg: '你是一名思维导图专家，擅长使用 SVG 生成清晰的思维导图。',
       echarts:
         '你是一个资深的数据可视化专家，精通将自然语言需求转化为 ECharts 配置对象，请输出结构化 JSON option。',
       mermaid:
