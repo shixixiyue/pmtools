@@ -2,13 +2,23 @@
  * API客户端 - 处理与AI服务的交互
  */
 
+// 图片上传配置常量
+const IMAGE_CONFIG = {
+  maxCount: 4,           // 最大图片数量
+  maxSizeBytes: 4 * 1024 * 1024,  // 单张最大4MB
+  allowedTypes: ['image/jpeg', 'image/png', 'image/webp', 'image/gif'],
+  allowedExtensions: ['.jpg', '.jpeg', '.png', '.webp', '.gif']
+};
+
 class APIClient {
   constructor() {
     this.config = {
       url: '',
       key: '',
-      model: ''
+      model: '',
+      enableVision: true  // 默认启用图片解析
     };
+    this.runtimeConfig = null;  // 运行时配置（从config.json加载）
     this.promptMap = {};
     this.promptFiles = {
       canvas: 'prompts/canvas-prompt.txt',
@@ -32,7 +42,46 @@ class APIClient {
         '你是一个可靠的智能助手，请直接回答用户的问题并提供结构化输出。'
     };
     this.loadConfig();
+    this.loadRuntimeConfig();  // 加载运行时配置
     this.preloadPrompts(Object.keys(this.promptFiles));
+  }
+
+  // 加载运行时配置（从config.json，支持Docker环境变量注入）
+  async loadRuntimeConfig() {
+    try {
+      const response = await fetch('config.json');
+      if (response.ok) {
+        this.runtimeConfig = await response.json();
+        // 运行时配置优先级高于本地存储
+        if (this.runtimeConfig.enableVision !== undefined) {
+          this.config.enableVision = this.runtimeConfig.enableVision;
+        }
+        console.log('运行时配置已加载:', this.runtimeConfig);
+
+        // 触发配置更新事件，通知UI同步
+        this.notifyConfigUpdated();
+      }
+    } catch (error) {
+      // config.json不存在时静默失败，使用默认配置
+      console.log('未找到运行时配置文件，使用默认配置');
+    }
+  }
+
+  // 触发配置更新事件
+  notifyConfigUpdated() {
+    if (typeof window !== 'undefined') {
+      window.dispatchEvent(new CustomEvent('vision-config-updated', {
+        detail: {
+          enableVision: this.isVisionEnabled(),
+          isRuntimeLocked: this.runtimeConfig && this.runtimeConfig.enableVision !== undefined
+        }
+      }));
+    }
+  }
+
+  // 检查Vision配置是否被运行时锁定
+  isVisionConfigLocked() {
+    return this.runtimeConfig && this.runtimeConfig.enableVision !== undefined;
   }
 
   // 加载API配置
@@ -41,6 +90,24 @@ class APIClient {
     if (savedConfig) {
       this.config = { ...this.config, ...savedConfig };
     }
+    // 确保enableVision有默认值
+    if (this.config.enableVision === undefined) {
+      this.config.enableVision = true;
+    }
+  }
+
+  // 检查图片解析是否启用
+  isVisionEnabled() {
+    // 运行时配置优先级最高
+    if (this.runtimeConfig && this.runtimeConfig.enableVision !== undefined) {
+      return this.runtimeConfig.enableVision;
+    }
+    return this.config.enableVision !== false;
+  }
+
+  // 获取图片配置
+  getImageConfig() {
+    return { ...IMAGE_CONFIG };
   }
 
   preloadPrompts(keys = []) {
@@ -118,29 +185,71 @@ class APIClient {
     }
   }
 
-  async buildMessagesForModule(manifest, userMessage, contextMessages = []) {
+  async buildMessagesForModule(manifest, userMessage, contextMessages = [], images = []) {
     const prompt =
       (manifest && manifest.promptKey
         ? await this.ensurePrompt(manifest.promptKey)
         : null) || this.promptFallbacks.default;
 
+    // 构建用户消息内容（支持图片）
+    const userContent = this.buildUserContent(userMessage, images);
+
     return [
       { role: 'system', content: prompt },
       ...contextMessages,
-      { role: 'user', content: userMessage }
+      { role: 'user', content: userContent }
     ];
+  }
+
+  /**
+   * 构建用户消息内容（支持图片的OpenAI Vision API格式）
+   * @param {string} text - 文本内容
+   * @param {Array} images - 图片数组，每项包含 { base64, mimeType }
+   * @returns {string|Array} - 纯文本或多模态内容数组
+   */
+  buildUserContent(text, images = []) {
+    // 如果没有图片或未启用Vision，返回纯文本
+    if (!images || images.length === 0 || !this.isVisionEnabled()) {
+      return text;
+    }
+
+    // 构建多模态内容数组（OpenAI Vision API格式）
+    const content = [];
+
+    // 添加图片
+    for (const img of images) {
+      content.push({
+        type: 'image_url',
+        image_url: {
+          url: `data:${img.mimeType};base64,${img.base64}`,
+          detail: 'auto'  // 可选: 'low', 'high', 'auto'
+        }
+      });
+    }
+
+    // 添加文本（放在图片后面）
+    if (text && text.trim()) {
+      content.push({
+        type: 'text',
+        text: text
+      });
+    }
+
+    return content;
   }
 
   async generateModuleCompletion(
     manifest,
     userMessage,
     contextMessages = [],
-    options = {}
+    options = {},
+    images = []
   ) {
     const messages = await this.buildMessagesForModule(
       manifest,
       userMessage,
-      contextMessages
+      contextMessages,
+      images
     );
     return this.sendChatMessage(messages, options);
   }
@@ -151,12 +260,14 @@ class APIClient {
     contextMessages = [],
     onChunk,
     onComplete,
-    options = {}
+    options = {},
+    images = []
   ) {
     const messages = await this.buildMessagesForModule(
       manifest,
       userMessage,
-      contextMessages
+      contextMessages,
+      images
     );
     return this.sendChatMessageStream(messages, options, onChunk, onComplete);
   }

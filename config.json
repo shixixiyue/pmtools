@@ -1,0 +1,8 @@
+{
+  "enableVision": true,
+  "imageConfig": {
+    "maxCount": 4,
+    "maxSizeMB": 4,
+    "allowedTypes": ["image/jpeg", "image/png", "image/webp", "image/gif"]
+  }
+}

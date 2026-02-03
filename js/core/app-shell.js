@@ -34,6 +34,9 @@
       this.mermaidPanZoom = null;
       this.mermaidInitialized = false;
 
+      // 图片上传状态管理
+      this.pendingImages = [];  // 待发送的图片列表 { id, file, blobUrl, base64?, mimeType }
+
       this.globalStore = moduleRuntime.storageService.global();
       this.activeModuleId = null;
 
@@ -56,6 +59,16 @@
       this.el.sendButton = document.getElementById('send-button');
       this.el.clearHistoryBtn = document.getElementById('clear-history-btn');
       this.el.chatHistory = document.getElementById('chat-history');
+
+      // 图片上传相关
+      this.el.imageUploadBtn = document.getElementById('image-upload-btn');
+      this.el.imageFileInput = document.getElementById('image-file-input');
+      this.el.imagePreviewContainer = document.getElementById('image-preview-container');
+      this.el.imagePreviewModal = document.getElementById('image-preview-modal');
+      this.el.imagePreviewFull = document.getElementById('image-preview-full');
+      this.el.closeImagePreviewBtn = document.getElementById('close-image-preview-btn');
+      this.el.imageVisionDisabledTip = document.getElementById('image-vision-disabled-tip');
+      this.el.configEnableVision = document.getElementById('config-enable-vision');
 
       // 视图区域
       this.el.viewer = document.getElementById('svg-viewer');
@@ -287,6 +300,101 @@
           }
         });
       }
+
+      // 图片上传相关事件绑定
+      this.bindImageUploadEvents();
+    }
+
+    /**
+     * 绑定图片上传相关事件
+     */
+    bindImageUploadEvents() {
+      // 图片上传按钮点击
+      if (this.el.imageUploadBtn && this.el.imageFileInput) {
+        this.el.imageUploadBtn.addEventListener('click', () => {
+          if (!this.apiClient.isVisionEnabled()) {
+            this.showImageError('图片解析功能已禁用');
+            return;
+          }
+          this.el.imageFileInput.click();
+        });
+      }
+
+      // 文件选择变化
+      if (this.el.imageFileInput) {
+        this.el.imageFileInput.addEventListener('change', (event) => {
+          const files = Array.from(event.target.files || []);
+          this.handleImageFiles(files);
+          event.target.value = '';  // 清空以允许重复选择同一文件
+        });
+      }
+
+      // 粘贴事件（支持图片粘贴）
+      if (this.el.chatInput) {
+        this.el.chatInput.addEventListener('paste', (event) => {
+          if (!this.apiClient.isVisionEnabled()) return;
+
+          const items = event.clipboardData?.items;
+          if (!items) return;
+
+          const imageFiles = [];
+          for (const item of items) {
+            if (item.type.startsWith('image/')) {
+              const file = item.getAsFile();
+              if (file) imageFiles.push(file);
+            }
+          }
+
+          if (imageFiles.length > 0) {
+            // 不阻止默认行为，允许同时粘贴文本
+            this.handleImageFiles(imageFiles);
+          }
+        });
+      }
+
+      // 图片预览容器点击事件（删除和预览）
+      if (this.el.imagePreviewContainer) {
+        this.el.imagePreviewContainer.addEventListener('click', (event) => {
+          const deleteBtn = event.target.closest('.image-thumbnail-delete');
+          if (deleteBtn) {
+            event.stopPropagation();
+            const imageId = deleteBtn.dataset.imageId;
+            this.removeImage(imageId);
+            return;
+          }
+
+          const thumbnailItem = event.target.closest('.image-thumbnail-item');
+          if (thumbnailItem) {
+            const imageId = thumbnailItem.dataset.imageId;
+            this.openImagePreview(imageId);
+          }
+        });
+      }
+
+      // 图片预览模态窗关闭
+      if (this.el.closeImagePreviewBtn) {
+        this.el.closeImagePreviewBtn.addEventListener('click', () => {
+          this.closeImagePreviewModal();
+        });
+      }
+      if (this.el.imagePreviewModal) {
+        this.el.imagePreviewModal.addEventListener('click', (event) => {
+          if (event.target === this.el.imagePreviewModal) {
+            this.closeImagePreviewModal();
+          }
+        });
+      }
+
+      // 初始化图片上传UI状态
+      this.updateImageUploadUI();
+
+      // 监听运行时配置更新事件
+      if (typeof window !== 'undefined') {
+        window.addEventListener('vision-config-updated', (event) => {
+          this.updateImageUploadUI();
+          this.updateVisionConfigUI(event.detail);
+        });
+      }
     }
 
     setupModuleSwitcher() {
@@ -461,14 +569,21 @@
       const wrapper = document.createElement('div');
       const manifest = this.getActiveManifest();
       const actionsHtml = this.buildMessageActions(message, options);
+
+      // 构建图片HTML（用于用户消息）
+      const imagesHtml = this.buildMessageImagesHtml(message.images);
+
       if (message.type === 'user') {
         wrapper.className = 'flex justify-end';
         wrapper.innerHTML = `
           <div class="chat-bubble-user message-with-delete" data-message-id="${message.id}">
-            <div>${Utils.escapeHtml(message.content)}</div>
+            ${imagesHtml}
+            <div>${Utils.escapeHtml(message.content || '')}</div>
             ${actionsHtml}
           </div>
         `;
+        // 绑定图片点击预览事件
+        this.bindBubbleImagePreview(wrapper, message.images);
       } else if (message.type === 'error') {
         wrapper.className = 'flex justify-start';
         wrapper.innerHTML = `
@@ -507,6 +622,47 @@
         }
       }
       return wrapper;
+    }
+
+    /**
+     * 构建消息中图片的HTML
+     * @param {Array} images - 图片数组
+     * @returns {string} - HTML字符串
+     */
+    buildMessageImagesHtml(images) {
+      if (!images || images.length === 0) return '';
+
+      const imageItems = images.map((img, index) => {
+        const src = `data:${img.mimeType};base64,${img.base64}`;
+        return `
+          <div class="chat-bubble-image" data-image-index="${index}">
+            <img src="${src}" alt="图片 ${index + 1}" loading="lazy" />
+          </div>
+        `;
+      }).join('');
+
+      return `<div class="chat-bubble-images">${imageItems}</div>`;
+    }
+
+    /**
+     * 绑定气泡中图片的点击预览事件
+     * @param {HTMLElement} wrapper - 消息包装元素
+     * @param {Array} images - 图片数组
+     */
+    bindBubbleImagePreview(wrapper, images) {
+      if (!images || images.length === 0) return;
+
+      const imageElements = wrapper.querySelectorAll('.chat-bubble-image');
+      imageElements.forEach((el, index) => {
+        el.addEventListener('click', (event) => {
+          event.stopPropagation();
+          const img = images[index];
+          if (img && this.el.imagePreviewModal && this.el.imagePreviewFull) {
+            this.el.imagePreviewFull.src = `data:${img.mimeType};base64,${img.base64}`;
+            this.el.imagePreviewModal.classList.add('active');
+          }
+        });
+      });
     }
 
     buildMessageActions(message, options = {}) {
@@ -692,7 +848,8 @@
         .map((msg) => ({
           role: msg.type === 'user' ? 'user' : 'assistant',
           // 使用原始内容作为 LLM 上下文，兼容无 rawContent 的旧记录
-          content: msg.rawContent || msg.content || ''
+          content: msg.rawContent || msg.content || '',
+          images: msg.type === 'user' ? msg.images || [] : undefined
         }));
 
       this.isProcessing = true;
@@ -702,7 +859,8 @@
 
       this.beginStreaming(manifest, {
         userMessage,
-        contextMessages
+        contextMessages,
+        images: userMessage.images || []  // 传递原始用户消息的图片
       });
     }
 
@@ -745,10 +903,14 @@
       return nextId;
     }
 
-    sendMessage() {
+    async sendMessage() {
       if (!this.el.chatInput) return;
       const message = this.el.chatInput.value.trim();
-      if (!message || this.isProcessing) return;
+      const hasImages = this.pendingImages.length > 0;
+
+      // 必须有文本或图片才能发送
+      if (!message && !hasImages) return;
+      if (this.isProcessing) return;
 
       if (!this.apiClient.isConfigValid()) {
         alert('⚠️ 请先配置API设置！点击右上角齿轮图标进行配置。');
@@ -756,18 +918,34 @@
         return;
       }
 
+      // 准备图片数据（转换为base64）
+      let images = [];
+      if (hasImages && this.apiClient.isVisionEnabled()) {
+        try {
+          images = await this.prepareImagesForSend();
+        } catch (error) {
+          console.error('图片处理失败:', error);
+          this.showImageError('图片处理失败，请重试');
+          return;
+        }
+      }
+
       const manifest = this.getActiveManifest();
       const userMessage = {
         id: Utils.generateId('msg'),
         type: 'user',
         content: message,
-        timestamp: new Date().toISOString()
+        timestamp: new Date().toISOString(),
+        images: images.length > 0 ? images : undefined  // 保存图片数据到消息
       };
 
       this.conversationService.appendMessage(manifest, userMessage);
       this.renderConversationHistory();
       this.el.chatInput.value = '';
       Utils.autoResizeTextarea(this.el.chatInput);
+
+      // 清空待发送图片
+      this.clearPendingImages();
 
       const context = this.conversationService.buildContext(manifest);
       if (!context) {
@@ -782,7 +960,8 @@
 
       this.beginStreaming(manifest, {
         userMessage: context.userMessage,
-        contextMessages: context.contextMessages
+        contextMessages: context.contextMessages,
+        images: images  // 传递图片数据
       });
     }
 
@@ -858,7 +1037,8 @@
           payload.contextMessages,
           handleChunk,
           handleComplete,
-          STREAM_DEFAULT_OPTIONS
+          STREAM_DEFAULT_OPTIONS,
+          payload.images || []  // 传递图片数据
         )
         .then((streamHandle) => {
           this.activeStreamHandle = streamHandle;
@@ -2705,6 +2885,11 @@
       if (this.el.apiUrlInput) this.el.apiUrlInput.value = config.url || '';
       if (this.el.apiKeyInput) this.el.apiKeyInput.value = config.key || '';
       if (this.el.apiModelInput) this.el.apiModelInput.value = config.model || '';
+      if (this.el.configEnableVision) {
+        this.el.configEnableVision.checked = config.enableVision !== false;
+      }
+      // 更新图片上传UI状态
+      this.updateImageUploadUI();
     }
 
     async testAPI() {
@@ -2721,7 +2906,8 @@
       const config = {
         url: this.el.apiUrlInput?.value.trim(),
         key: this.el.apiKeyInput?.value.trim(),
-        model: this.el.apiModelInput?.value.trim()
+        model: this.el.apiModelInput?.value.trim(),
+        enableVision: this.el.configEnableVision?.checked !== false
       };
       if (!config.url || !config.key || !config.model) {
         this.setConfigStatus('error', '请填写完整的配置');
@@ -2729,6 +2915,8 @@
       }
       this.apiClient.saveConfig(config);
       this.setConfigStatus('success', '配置已保存');
+      // 更新图片上传UI状态
+      this.updateImageUploadUI();
       //setTimeout(() => this.closeConfigModal(), 600);
     }
 
@@ -2775,6 +2963,255 @@
           'text-gray-600'
         );
       }
+    }
+
+    // ==================== 图片上传相关方法 ====================
+
+    /**
+     * 处理图片文件（上传或粘贴）
+     * @param {File[]} files - 文件列表
+     */
+    handleImageFiles(files) {
+      const config = this.apiClient.getImageConfig();
+      const currentCount = this.pendingImages.length;
+      const availableSlots = config.maxCount - currentCount;
+
+      if (availableSlots <= 0) {
+        this.showImageError(`最多只能上传 ${config.maxCount} 张图片`);
+        return;
+      }
+
+      const filesToAdd = files.slice(0, availableSlots);
+
+      for (const file of filesToAdd) {
+        // 验证文件类型
+        if (!config.allowedTypes.includes(file.type)) {
+          this.showImageError(`不支持的图片格式: ${file.type}`);
+          continue;
+        }
+
+        // 验证文件大小
+        if (file.size > config.maxSizeBytes) {
+          const maxSizeMB = config.maxSizeBytes / (1024 * 1024);
+          this.showImageError(`图片大小超过限制 (最大 ${maxSizeMB}MB)`);
+          continue;
+        }
+
+        // 创建图片对象
+        const imageObj = {
+          id: Utils.generateId('img'),
+          file: file,
+          blobUrl: URL.createObjectURL(file),
+          mimeType: file.type,
+          base64: null  // 发送时再转换
+        };
+
+        this.pendingImages.push(imageObj);
+      }
+
+      this.renderImageThumbnails();
+
+      if (files.length > availableSlots) {
+        this.showImageError(`已达到最大图片数量限制 (${config.maxCount} 张)`);
+      }
+    }
+
+    /**
+     * 渲染图片缩略图
+     */
+    renderImageThumbnails() {
+      if (!this.el.imagePreviewContainer) return;
+
+      if (this.pendingImages.length === 0) {
+        this.el.imagePreviewContainer.classList.add('hidden');
+        this.el.imagePreviewContainer.innerHTML = '';
+        return;
+      }
+
+      this.el.imagePreviewContainer.classList.remove('hidden');
+      this.el.imagePreviewContainer.innerHTML = this.pendingImages.map((img, index) => `
+        <div class="image-thumbnail-item" data-image-id="${img.id}" title="点击预览">
+          <img src="${img.blobUrl}" alt="图片 ${index + 1}" />
+          <button class="image-thumbnail-delete" data-image-id="${img.id}" title="删除">
+            <iconify-icon icon="ph:x-bold"></iconify-icon>
+          </button>
+        </div>
+      `).join('');
+    }
+
+    /**
+     * 删除指定图片
+     * @param {string} imageId - 图片ID
+     */
+    removeImage(imageId) {
+      const index = this.pendingImages.findIndex(img => img.id === imageId);
+      if (index === -1) return;
+
+      const img = this.pendingImages[index];
+      // 释放Blob URL
+      if (img.blobUrl) {
+        URL.revokeObjectURL(img.blobUrl);
+      }
+
+      this.pendingImages.splice(index, 1);
+      this.renderImageThumbnails();
+    }
+
+    /**
+     * 清空所有待发送图片
+     */
+    clearPendingImages() {
+      for (const img of this.pendingImages) {
+        if (img.blobUrl) {
+          URL.revokeObjectURL(img.blobUrl);
+        }
+      }
+      this.pendingImages = [];
+      this.renderImageThumbnails();
+    }
+
+    /**
+     * 打开图片预览模态窗
+     * @param {string} imageId - 图片ID
+     */
+    openImagePreview(imageId) {
+      const img = this.pendingImages.find(i => i.id === imageId);
+      if (!img || !this.el.imagePreviewModal || !this.el.imagePreviewFull) return;
+
+      this.el.imagePreviewFull.src = img.blobUrl;
+      this.el.imagePreviewModal.classList.add('active');
+    }
+
+    /**
+     * 关闭图片预览模态窗
+     */
+    closeImagePreviewModal() {
+      if (!this.el.imagePreviewModal) return;
+      this.el.imagePreviewModal.classList.remove('active');
+      if (this.el.imagePreviewFull) {
+        this.el.imagePreviewFull.src = '';
+      }
+    }
+
+    /**
+     * 显示图片错误提示
+     * @param {string} message - 错误信息
+     */
+    showImageError(message) {
+      // 创建toast提示
+      const toast = document.createElement('div');
+      toast.className = 'image-error-toast';
+      toast.textContent = message;
+      document.body.appendChild(toast);
+
+      // 3秒后自动移除
+      setTimeout(() => {
+        toast.remove();
+      }, 3000);
+    }
+
+    /**
+     * 更新图片上传UI状态（根据enableVision配置）
+     */
+    updateImageUploadUI() {
+      const visionEnabled = this.apiClient.isVisionEnabled();
+
+      // 更新上传按钮状态
+      if (this.el.imageUploadBtn) {
+        this.el.imageUploadBtn.disabled = !visionEnabled;
+        this.el.imageUploadBtn.title = visionEnabled
+          ? '上传图片 (支持粘贴)'
+          : '图片解析功能已禁用';
+      }
+
+      // 更新禁用提示
+      if (this.el.imageVisionDisabledTip) {
+        this.el.imageVisionDisabledTip.classList.toggle('hidden', visionEnabled);
+      }
+
+      // 如果禁用了Vision，清空待发送图片
+      if (!visionEnabled && this.pendingImages.length > 0) {
+        this.clearPendingImages();
+      }
+    }
+
+    /**
+     * 更新Vision配置UI（处理运行时锁定状态）
+     * @param {Object} detail - 配置详情 { enableVision, isRuntimeLocked }
+     */
+    updateVisionConfigUI(detail) {
+      if (!this.el.configEnableVision) return;
+
+      const { enableVision, isRuntimeLocked } = detail;
+
+      // 更新复选框状态
+      this.el.configEnableVision.checked = enableVision;
+
+      // 如果被运行时配置锁定，禁用复选框并添加提示
+      if (isRuntimeLocked) {
+        this.el.configEnableVision.disabled = true;
+
+        // 添加锁定提示
+        const parent = this.el.configEnableVision.closest('.flex');
+        if (parent) {
+          let lockHint = parent.querySelector('.vision-lock-hint');
+          if (!lockHint) {
+            lockHint = document.createElement('span');
+            lockHint.className = 'vision-lock-hint text-xs text-orange-600 ml-2';
+            lockHint.innerHTML = '<iconify-icon icon="ph:lock-bold" class="align-middle"></iconify-icon> 由部署配置锁定';
+            parent.appendChild(lockHint);
+          }
+        }
+      } else {
+        this.el.configEnableVision.disabled = false;
+
+        // 移除锁定提示
+        const parent = this.el.configEnableVision.closest('.flex');
+        if (parent) {
+          const lockHint = parent.querySelector('.vision-lock-hint');
+          if (lockHint) {
+            lockHint.remove();
+          }
+        }
+      }
+    }
+
+    /**
+     * 将File转换为Base64
+     * @param {File} file - 文件对象
+     * @returns {Promise<string>} - Base64字符串（不含data:前缀）
+     */
+    fileToBase64(file) {
+      return new Promise((resolve, reject) => {
+        const reader = new FileReader();
+        reader.onload = () => {
+          // 移除 "data:image/xxx;base64," 前缀
+          const base64 = reader.result.split(',')[1];
+          resolve(base64);
+        };
+        reader.onerror = reject;
+        reader.readAsDataURL(file);
+      });
+    }
+
+    /**
+     * 准备图片数据用于API发送（并行转换优化）
+     * @returns {Promise<Array>} - 图片数据数组 [{ base64, mimeType }]
+     */
+    async prepareImagesForSend() {
+      // 并行转换所有图片为base64
+      const conversionPromises = this.pendingImages.map(async (img) => {
+        // 如果还没有转换为base64，现在转换
+        if (!img.base64) {
+          img.base64 = await this.fileToBase64(img.file);
+        }
+        return {
+          base64: img.base64,
+          mimeType: img.mimeType
+        };
+      });
+
+      return Promise.all(conversionPromises);
     }
   }
 

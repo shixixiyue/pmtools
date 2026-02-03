@@ -489,3 +489,213 @@ iconify-icon {
 }
 
 #dmermaidSvg{ height: 0px;}
+
+/* ========== 图片上传相关样式 ========== */
+
+/* 图片上传按钮 */
+.image-upload-btn {
+  flex-shrink: 0;
+  border-radius: 8px;
+  transition: all 0.2s ease;
+}
+
+.image-upload-btn:hover {
+  background: rgba(6, 182, 212, 0.1);
+  transform: scale(1.05);
+}
+
+.image-upload-btn:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
+
+.image-upload-btn:disabled:hover {
+  background: transparent;
+  transform: none;
+}
+
+/* 图片缩略图容器 */
+#image-preview-container {
+  padding: 8px;
+  background: rgba(255, 255, 255, 0.8);
+  border: 2px dashed #d1d5db;
+  border-radius: 8px;
+}
+
+#image-preview-container:not(.hidden) {
+  display: flex;
+}
+
+/* 单个图片缩略图项 */
+.image-thumbnail-item {
+  position: relative;
+  width: 72px;
+  height: 72px;
+  border-radius: 8px;
+  overflow: hidden;
+  border: 2px solid #e5e7eb;
+  background: #f9fafb;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  flex-shrink: 0;
+}
+
+.image-thumbnail-item:hover {
+  border-color: #06b6d4;
+  transform: scale(1.05);
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+}
+
+.image-thumbnail-item img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+/* 图片删除按钮 */
+.image-thumbnail-delete {
+  position: absolute;
+  top: 2px;
+  right: 2px;
+  width: 20px;
+  height: 20px;
+  border-radius: 50%;
+  background: rgba(220, 38, 38, 0.9);
+  color: white;
+  border: none;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  opacity: 0;
+  transition: opacity 0.2s ease;
+  z-index: 10;
+}
+
+.image-thumbnail-item:hover .image-thumbnail-delete {
+  opacity: 1;
+}
+
+.image-thumbnail-delete:hover {
+  background: #dc2626;
+  transform: scale(1.1);
+}
+
+.image-thumbnail-delete iconify-icon {
+  font-size: 12px;
+}
+
+/* 图片数量限制提示 */
+.image-count-badge {
+  position: absolute;
+  bottom: 2px;
+  left: 2px;
+  background: rgba(0, 0, 0, 0.7);
+  color: white;
+  font-size: 10px;
+  padding: 1px 4px;
+  border-radius: 4px;
+}
+
+/* 图片预览模态窗 */
+.image-preview-modal-content {
+  position: relative;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 90vw;
+  height: 90vh;
+  background: rgba(0, 0, 0, 0.95);
+  border-radius: 8px;
+}
+
+.image-preview-modal-content img {
+  max-width: 100%;
+  max-height: 100%;
+  object-fit: contain;
+  border-radius: 4px;
+}
+
+/* 聊天气泡中的图片显示 */
+.chat-bubble-images {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-bottom: 8px;
+}
+
+.chat-bubble-image {
+  width: 80px;
+  height: 80px;
+  border-radius: 6px;
+  overflow: hidden;
+  border: 2px solid rgba(255, 255, 255, 0.3);
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.chat-bubble-image:hover {
+  transform: scale(1.05);
+  border-color: rgba(255, 255, 255, 0.6);
+}
+
+.chat-bubble-image img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+/* 图片加载中状态 */
+.image-loading {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: #f3f4f6;
+}
+
+.image-loading::after {
+  content: '';
+  width: 24px;
+  height: 24px;
+  border: 2px solid #d1d5db;
+  border-top-color: #06b6d4;
+  border-radius: 50%;
+  animation: spin 0.8s linear infinite;
+}
+
+@keyframes spin {
+  to { transform: rotate(360deg); }
+}
+
+/* 图片上传拖拽区域高亮 */
+.image-drop-active {
+  background: rgba(6, 182, 212, 0.1) !important;
+  border-color: #06b6d4 !important;
+  border-style: solid !important;
+}
+
+/* 图片大小/格式错误提示 */
+.image-error-toast {
+  position: fixed;
+  bottom: 20px;
+  left: 50%;
+  transform: translateX(-50%);
+  background: #dc2626;
+  color: white;
+  padding: 12px 20px;
+  border-radius: 8px;
+  font-weight: 500;
+  z-index: 9999;
+  animation: toast-in 0.3s ease;
+}
+
+@keyframes toast-in {
+  from {
+    opacity: 0;
+    transform: translateX(-50%) translateY(20px);
+  }
+  to {
+    opacity: 1;
+    transform: translateX(-50%) translateY(0);
+  }
+}

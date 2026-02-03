@@ -65,16 +65,30 @@
         
         <!-- 输入区 -->
         <div class="p-3 border-t-3 border-gray-300 bg-yellow-50">
+          <!-- 图片缩略图预览区 -->
+          <div id="image-preview-container" class="mb-2 flex flex-wrap gap-2 hidden">
+            <!-- 动态插入图片缩略图 -->
+          </div>
           <div class="relative flex items-center gap-2">
+            <!-- 图片上传按钮 -->
+            <button id="image-upload-btn" class="image-upload-btn text-gray-500 hover:text-cyan-600 transition-colors p-2" title="上传图片 (支持粘贴)">
+              <iconify-icon icon="ph:image-bold" class="text-2xl"></iconify-icon>
+            </button>
+            <input type="file" id="image-file-input" accept="image/jpeg,image/png,image/webp,image/gif" multiple class="hidden" />
             <textarea
               id="chat-input"
-              placeholder="输入您的想法，按Enter发送，Shift+Enter换行..."
+              placeholder="输入您的想法，按Enter发送，Shift+Enter换行，可粘贴图片..."
               class="flex-1 auto-resize-input border-2 border-gray-800 focus:border-cyan-500 focus:outline-none transition-colors font-medium"
               rows="1"
             ></textarea>
             <button id="send-button" class="text-cyan-600 hover:text-cyan-700 transition-colors p-2 hover:scale-110 transform duration-200">
               <iconify-icon icon="ph:paper-plane-tilt-fill" class="text-3xl"></iconify-icon>
             </button>
+          </div>
+          <!-- 图片功能提示 -->
+          <div id="image-vision-disabled-tip" class="mt-1 text-xs text-gray-400 hidden">
+            <iconify-icon icon="ph:info" class="align-middle"></iconify-icon>
+            图片解析功能已禁用
           </div>
           <div id="chat-quick-actions" class="mt-2 flex flex-wrap gap-2 hidden"></div>
         </div>
@@ -172,15 +186,30 @@
               <iconify-icon icon="ph:robot-bold" class="text-lg text-purple-600"></iconify-icon>
               模型 (Model)
             </label>
-            <input 
-              id="api-model" 
-              type="text" 
-              placeholder="gpt-4-turbo" 
+            <input
+              id="api-model"
+              type="text"
+              placeholder="gpt-4-turbo"
               class="config-input"
               value=""
             />
           </div>
-          
+
+          <!-- 图片解析开关 -->
+          <div class="flex items-center justify-between py-3 border-t-2 border-gray-200 mt-2">
+            <div class="flex items-center gap-2">
+              <iconify-icon icon="ph:eye-bold" class="text-lg text-cyan-600"></iconify-icon>
+              <div>
+                <label class="block font-bold text-gray-800">启用图片解析</label>
+                <span class="text-xs text-gray-500">允许上传图片并由AI进行视觉理解</span>
+              </div>
+            </div>
+            <label class="relative inline-flex items-center cursor-pointer">
+              <input type="checkbox" id="config-enable-vision" class="sr-only peer" checked>
+              <div class="w-11 h-6 bg-gray-300 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-cyan-500"></div>
+            </label>
+          </div>
+
           <!-- 状态显示 -->
           <div id="config-status" class="p-3 border-2 border-gray-300 bg-gray-50 text-sm text-gray-600 hidden">
             <iconify-icon icon="ph:info" class="align-middle"></iconify-icon>
@@ -248,6 +277,16 @@
         <div class="page-preview-body">
           <iframe id="page-preview-iframe" title="落地页全屏预览" sandbox="allow-scripts allow-same-origin allow-forms allow-pointer-lock" class="page-preview-iframe"></iframe>
         </div>
+      </div>
+    </div>
+
+    <!-- 图片预览模态窗 -->
+    <div id="image-preview-modal" class="modal-overlay">
+      <div class="image-preview-modal-content">
+        <button id="close-image-preview-btn" class="absolute top-4 right-4 text-white hover:text-gray-300 transition-colors z-10">
+          <iconify-icon icon="ph:x-bold" class="text-3xl"></iconify-icon>
+        </button>
+        <img id="image-preview-full" src="" alt="图片预览" class="max-w-full max-h-full object-contain" />
       </div>
     </div>
 
