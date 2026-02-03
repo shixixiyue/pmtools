@@ -10,6 +10,6 @@ services:
     environment:
       # 是否启用图片解析功能（Vision API），默认启用
       - ENABLE_VISION=true
-    volumes:
+    #volumes:
       # 可选：挂载自定义配置文件覆盖默认配置
       # - ./config.json:/usr/share/nginx/html/config.json:ro
