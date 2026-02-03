@@ -1325,8 +1325,9 @@
         };
       }
       const svgCtx = streamState.svg;
+      // 兼容 ```svg、```xml、``` xml、``` svg 等格式
       const startPattern =
-        manifest.artifact?.startPattern || /```(?:svg)?\s*<svg/i;
+        manifest.artifact?.startPattern || /```\s*(?:svg|xml)?\s*<svg/i;
       if (!svgCtx.started) {
         const match = fullContent.match(startPattern);
         if (match) {
@@ -1347,7 +1348,8 @@
       }
 
       const svgSection = fullContent.substring(svgCtx.startIndex);
-      let cleaned = svgSection.replace(/```(?:svg)?\s*/i, '');
+      // 兼容清理 ```svg、```xml、``` xml、``` svg 等前缀
+      let cleaned = svgSection.replace(/```\s*(?:svg|xml)?\s*/i, '');
       cleaned = cleaned.replace(/```$/, '');
       const closingIndex = cleaned.indexOf('</svg>');
       if (closingIndex !== -1) {

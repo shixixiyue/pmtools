@@ -24,7 +24,8 @@ function generateId(prefix = 'id') {
 // 解析SVG响应，提取SVG内容和前后文本，容错缺失的结束反引号
 function parseSVGResponse(response = '') {
   const content = typeof response === 'string' ? response : String(response || '');
-  const svgFenceRegex = /```(?:svg)?\s*([\s\S]*?)```/i;
+  // 兼容 ```svg、```xml、``` xml、``` svg 等格式
+  const svgFenceRegex = /```\s*(?:svg|xml)?\s*([\s\S]*?)```/i;
   const fenceMatch = content.match(svgFenceRegex);
 
   if (fenceMatch) {
@@ -40,14 +41,14 @@ function parseSVGResponse(response = '') {
     };
   }
 
-  // 兼容缺失结束反引号的情况
-  const svgStartRegex = /```(?:svg)?\s*<svg[\s\S]*$/i;
+  // 兼容缺失结束反引号的情况（同样兼容 xml 格式）
+  const svgStartRegex = /```\s*(?:svg|xml)?\s*<svg[\s\S]*$/i;
   const startMatch = content.match(svgStartRegex);
 
   if (startMatch) {
     const startIndex = startMatch.index;
     const beforeText = content.substring(0, startIndex).trim();
-    let svgSection = content.substring(startIndex).replace(/```(?:svg)?\s*/i, '').trim();
+    let svgSection = content.substring(startIndex).replace(/```\s*(?:svg|xml)?\s*/i, '').trim();
 
     // 去掉尾部残留的反引号
     svgSection = svgSection.replace(/```$/, '').trim();

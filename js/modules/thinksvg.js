@@ -64,8 +64,8 @@
       // 代码围栏标识
       fence: 'svg',
 
-      // SVG 开始模式匹配
-      startPattern: /```(?:svg)?\s*<svg/i,
+      // SVG 开始模式匹配（兼容 ```svg、```xml、``` xml 等格式）
+      startPattern: /```\s*(?:svg|xml)?\s*<svg/i,
 
       // 内容解析器
       parser: parseResponse

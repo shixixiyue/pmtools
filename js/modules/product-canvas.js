@@ -22,7 +22,7 @@
     artifact: {
       type: 'svg',
       fence: 'svg',
-      startPattern: /```(?:svg)?\s*<svg/i,
+      startPattern: /```\s*(?:svg|xml)?\s*<svg/i,
       parser: parseResponse
     },
     hooks: {
